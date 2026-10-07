@@ -1,0 +1,1147 @@
+{
+  "info": {
+    "_postman_id": "7c9d1f2a-4b6e-4f0a-9a11-utssoaworkout0",
+    "name": "AI-Powered Workout & Habit Tracker — UTS SOA",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Kontrak REST service workout. >=30 request + otomatis di tab Tests (200/201/400/404/405/409/502-504), memakai variable baseUrl dan variable chaining antar-request."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{baseUrl}}",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "premiumUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "freeUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "exerciseId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "exerciseName",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "premiumExerciseId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "logId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Info",
+      "item": [
+        {
+          "name": "GET / (health/info)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"nama service muncul\", () => pm.expect(pm.response.json().service).to.include(\"Workout\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Users",
+      "item": [
+        {
+          "name": "POST /users - registrasi VALID (uji strip isAdmin & is_premium)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama\":\"  Rangga  Latih  \",\"email\":\"reg-{{$timestamp}}@test.com\",\"password\":\"password123\",\"berat_badan\":68.5,\"tinggi_badan\":170,\"isAdmin\":true,\"is_premium\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"is_premium DIPAKSA false walau body minta true\", () => pm.expect(j.data.is_premium).to.eql(false));",
+                  "pm.test(\"isAdmin TIDAK tersimpan / tidak muncul\", () => pm.expect(j.data).to.not.have.property(\"isAdmin\"));",
+                  "pm.test(\"password TIDAK pernah dibocorkan\", () => pm.expect(j.data).to.not.have.property(\"password\"));",
+                  "pm.test(\"nama ternormalisasi (spasi rapi)\", () => pm.expect(j.data.nama).to.eql(\"Rangga Latih\"));",
+                  "pm.test(\"ada header Location\", () => pm.response.to.have.header(\"Location\"));",
+                  "pm.collectionVariables.set(\"userId\", j.data.id);",
+                  "pm.collectionVariables.set(\"userEmail\", j.data.email);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /users - EMAIL DUPLIKAT -> 409",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama\":\"Duplikat\",\"email\":\"{{userEmail}}\",\"password\":\"password123\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409 Conflict\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"pesan menyebut email\", () => pm.expect(pm.response.json().message).to.match(/sudah terdaftar/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /users - INVALID (nama kosong, email salah, pass pendek)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama\":\"\",\"email\":\"bukan-email\",\"password\":\"123\",\"isAdmin\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"3 error field sekaligus (abortEarly:false)\", () => { pm.expect(j.errors).to.have.property(\"nama\"); pm.expect(j.errors).to.have.property(\"email\"); pm.expect(j.errors).to.have.property(\"password\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users - daftar + pagination",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/users?limit=5&offset=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"data berupa array\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users - filter is_premium + sort nama asc",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/users?is_premium=false&sort=nama&order=asc&limit=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json(); pm.test(\"punya field status\", () => pm.expect(j).to.have.property(\"status\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users/:id - detail (chaining userId)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/users/{{userId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"id cocok dengan hasil POST\", () => pm.expect(String(j.data.id)).to.eql(String(pm.collectionVariables.get(\"userId\"))));",
+                  "pm.test(\"password tersembunyi di detail\", () => pm.expect(j.data).to.not.have.property(\"password\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users/:id - TIDAK ADA -> 404",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/users/99999999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /users/:id - UPGRADE premium (jalur sah)",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/{{userId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama\":\"Rangga Premium\",\"is_premium\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"is_premium kini true\", () => pm.expect(j.data.is_premium).to.eql(true));",
+                  "pm.collectionVariables.set(\"premiumUserId\", j.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /users/:id - TIDAK ADA -> 404",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/99999999",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama\":\"Hantu\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /users - registrasi user FREE kedua (untuk uji hapus)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama\":\"Free Kedua\",\"email\":\"free-{{$timestamp}}@test.com\",\"password\":\"password123\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"freeUserId\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Exercises",
+      "item": [
+        {
+          "name": "POST /exercises - create VALID",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/exercises",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama_latihan\":\"Push Up Variasi {{$timestamp}}\",\"kategori\":\"upper body\",\"kalori_per_menit\":7.2}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"is_premium_only default false\", () => pm.expect(j.data.is_premium_only).to.eql(false));",
+                  "pm.test(\"header Location ada\", () => pm.response.to.have.header(\"Location\"));",
+                  "pm.collectionVariables.set(\"exerciseId\", j.data.id);",
+                  "pm.collectionVariables.set(\"exerciseName\", j.data.nama_latihan);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /exercises - create PREMIUM_ONLY",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/exercises",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama_latihan\":\"Ring Muscle {{$timestamp}}\",\"kategori\":\"upper body\",\"kalori_per_menit\":11.5,\"is_premium_only\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"is_premium_only true tersimpan\", () => pm.expect(j.data.is_premium_only).to.eql(true));",
+                  "pm.collectionVariables.set(\"premiumExerciseId\", j.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /exercises - NAMA DUPLIKAT -> 409",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/exercises",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama_latihan\":\"{{exerciseName}}\",\"kategori\":\"core\",\"kalori_per_menit\":5}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409 Conflict\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /exercises - INVALID (kategori & kalori)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/exercises",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nama_latihan\":\"X\",\"kategori\":\"sayap\",\"kalori_per_menit\":-3}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"errors kategori + kalori\", () => { pm.expect(j.errors).to.have.property(\"kategori\"); pm.expect(j.errors).to.have.property(\"kalori_per_menit\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /exercises - daftar",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/exercises?limit=5"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /exercises - filter kategori + sort desc",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/exercises?kategori=cardio&sort=kalori_per_menit&order=desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /exercises - keyword (Op.like)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/exercises?keyword=push"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /exercises/:id - update kalori",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/exercises/{{exerciseId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"kalori_per_menit\":8.8}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"kalori berubah\", () => pm.expect(Number(pm.response.json().data.kalori_per_menit)).to.eql(8.8));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /exercises/:id - body kosong -> 400",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/exercises/{{exerciseId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /exercises/:id - TIDAK ADA -> 404",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/exercises/99999999",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"kalori_per_menit\":5}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /exercises/:id - method tak diizinkan -> 405 + Allow",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/exercises/{{exerciseId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 405\", () => pm.response.to.have.status(405));",
+                  "pm.test(\"header Allow menyebut PATCH\", () => pm.expect(pm.response.headers.get(\"Allow\")).to.include(\"PATCH\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Workout Logs",
+      "item": [
+        {
+          "name": "POST /workout-logs - set+repetition (chaining)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{premiumUserId}}\",\"tanggal\":\"2026-10-07\",\"catatan\":\"sesi pagi\",\"details\":[{\"exercise_id\":\"{{exerciseId}}\",\"set\":3,\"repetition\":12}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"total_kalori dihitung service (> 0)\", () => pm.expect(Number(j.data.total_kalori)).to.be.above(0));",
+                  "pm.test(\"kolom PIVOT 'set' terbaca\", () => pm.expect(j.data.exercises[0].WorkoutDetail.set).to.eql(3));",
+                  "pm.test(\"jumlah_gerakan virtual = 1\", () => pm.expect(j.data.jumlah_gerakan).to.eql(1));",
+                  "pm.collectionVariables.set(\"logId\", j.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workout-logs - berbasis durasi_menit",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{premiumUserId}}\",\"tanggal\":\"2026-10-07\",\"details\":[{\"exercise_id\":\"{{exerciseId}}\",\"set\":1,\"durasi_menit\":4}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"kalori durasi-based > 0\", () => pm.expect(Number(pm.response.json().data.total_kalori)).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workout-logs - tanpa details -> 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{premiumUserId}}\",\"tanggal\":\"2026-10-07\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workout-logs - repetition & durasi bersamaan -> 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{premiumUserId}}\",\"tanggal\":\"2026-10-07\",\"details\":[{\"exercise_id\":\"{{exerciseId}}\",\"repetition\":10,\"durasi_menit\":5}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"pesan nand\", () => pm.expect(JSON.stringify(pm.response.json())).to.match(/repetition/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workout-logs - tanggal invalid -> 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{premiumUserId}}\",\"tanggal\":\"07-10-2026\",\"details\":[{\"exercise_id\":\"{{exerciseId}}\",\"repetition\":10}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workout-logs - exercise TIDAK ADA -> 404",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{premiumUserId}}\",\"tanggal\":\"2026-10-07\",\"details\":[{\"exercise_id\":99999999,\"repetition\":10}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workout-logs - user TIDAK ADA -> 404",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":99999999,\"tanggal\":\"2026-10-07\",\"details\":[{\"exercise_id\":\"{{exerciseId}}\",\"repetition\":10}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workout-logs - FREE user catat premium -> 409",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{freeUserId}}\",\"tanggal\":\"2026-10-07\",\"details\":[{\"exercise_id\":\"{{premiumExerciseId}}\",\"repetition\":8}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409 Conflict\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"pesan freemium\", () => pm.expect(pm.response.json().message).to.match(/premium/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workout-logs/:id - lengkap + pivot (chaining logId)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/workout-logs/{{logId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"ada relasi user\", () => pm.expect(j.data.user).to.be.an(\"object\"));",
+                  "pm.test(\"kolom pivot repetition terbaca\", () => pm.expect(j.data.exercises[0].WorkoutDetail.repetition).to.eql(12));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workout-logs/:id - TIDAK ADA -> 404",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/workout-logs/99999999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users/:id/workout-logs - nested resource",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/users/{{premiumUserId}}/workout-logs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"total >= 2\", () => pm.expect(pm.response.json().total).to.be.at.least(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workout-logs/statistik - agregat (raw query)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/workout-logs/statistik?user_id={{premiumUserId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"punya total_sesi & total_kalori\", () => { pm.expect(j.data).to.have.property(\"total_sesi\"); pm.expect(j.data).to.have.property(\"total_kalori\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workout-logs/statistik - tanpa user_id -> 400",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/workout-logs/statistik"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /workout-logs/:id - method tak diizinkan -> 405",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/workout-logs/{{logId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"catatan\":\"tidak bisa\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 405\", () => pm.response.to.have.status(405));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Recommendation (3rd-party Gemini)",
+      "item": [
+        {
+          "name": "POST /recommendations/generate - FREE -> template DB (200)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/recommendations/generate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{freeUserId}}\",\"kondisi\":\"badan kaku sehabis duduk lama\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"tipe_akun free & sumber template_database\", () => { pm.expect(j.data.tipe_akun).to.eql(\"free\"); pm.expect(j.data.sumber).to.eql(\"template_database\"); });",
+                  "pm.test(\"arahan_ai null utk free\", () => pm.expect(j.data.arahan_ai).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /recommendations/generate - PREMIUM -> Gemini/502/504",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/recommendations/generate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{premiumUserId}}\",\"kondisi\":\"target program push day 30 menit\",\"kategori\":\"upper body\",\"durasi_menit\":30}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 (AI ok) ATAU 502/504 (fallback upstream)\", () => pm.expect([200, 502, 504]).to.include(pm.response.code));",
+                  "if ([502,504].includes(pm.response.code)) { const j = pm.response.json(); pm.test(\"fallback database disertakan\", () => { pm.expect(j.data.sumber).to.eql(\"fallback_database\"); pm.expect(j.data.gerakan).to.be.an(\"array\"); }); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /recommendations/generate - INVALID (kondisi pendek) -> 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/recommendations/generate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"user_id\":\"{{freeUserId}}\",\"kondisi\":\"abc\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"errors kondisi\", () => pm.expect(pm.response.json().errors).to.have.property(\"kondisi\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Cleanup (aturan bisnis 409 + soft delete)",
+      "item": [
+        {
+          "name": "DELETE /users/:id - masih punya log -> 409",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/users/{{premiumUserId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409 Conflict\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"pesan workout log\", () => pm.expect(pm.response.json().message).to.match(/workout log/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /users/:id - tanpa log -> soft delete 200",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/users/{{freeUserId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"pesan soft delete\", () => pm.expect(pm.response.json().message).to.match(/soft delete/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users/:id - user ter-soft-delete -> 404",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/users/{{freeUserId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
