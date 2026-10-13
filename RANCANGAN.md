@@ -1,6 +1,6 @@
 # RANCANGAN — AI-Powered Workout & Habit Tracker
 
-Dokumen analisis & rancangan untuk UTS Mata Kuliah Service Oriented Architecture (SOA) — S1 Sistem Informasi Bisnis, ISTTS.
+Dokumen analisis & rancangan untuk Mata Kuliah Service Oriented Architecture (SOA) — S1 Sistem Informasi Bisnis, ISTTS.
 
 ---
 
@@ -126,13 +126,16 @@ Base path: `{{baseUrl}}/api/v1`. Prefix `/api/v1` menandakan versi besar kontrak
 | 12 | GET    | `/api/v1/workout-logs/:id`              | Detail log dengan **include** `workout_details` + `exercise` (kolom pivot tampil) | 200         | 404, 405                                             |
 | 13 | POST   | `/api/v1/recommendations/generate`      | **Integrasi Gemini API:** Premium → generate kustom via AI; Free → template dari DB | 200        | 400 (kondisi kosong), 409 (Free minta exercise premium-only), 502/504 (Gemini gagal/timeout) |
 | 14 | GET    | `/api/v1/workout-logs/statistik`        | Rekap kalori & konsistensi harian user (agregat, versi raw query)           | 200               | 404, 405                                             |
+| 15 | POST   | `/api/v1/payments/transaction`          | **Integrasi Midtrans (Snap):** buat transaksi upgrade premium → `snap_token` + `redirect_url` (order_id `PREM-<user_id>-<ts>`) | 201 | 400 (validasi), 404 (user), 409 (sudah premium), **502** (Midtrans tak terjangkau), 503 (server key kosong) |
+| 16 | POST   | `/api/v1/payments/notification`         | **Webhook Midtrans:** verifikasi `signature_key` (SHA-512) → `settlement`/`capture` menaikkan `is_premium` (idempoten) | 200               | 400 (nominal/order_id), **403** (signature tidak sah), 405 |
 
-### Aturan Bisnis (ditolak dengan 400 / 409)
+### Aturan Bisnis (ditolak dengan 400 / 403 / 409)
 
 1. **409 — User masih punya `workout_logs` tidak boleh dihapus** (DELETE `/api/v1/users/:id`): data riwayat latihan milik pengguna aktif tidak boleh hilang begitu saja.
 2. **409 — Exercise yang masih dirujuk `workout_details` tidak boleh dihapus** (DELETE `/api/v1/exercises/:id`): master data yang dipakai transaksi tidak boleh dimatikan.
 3. **409 — User Free meminta rekomendasi yang berisi exercise `is_premium_only`** (POST `/api/v1/recommendations/generate`): aturan freemium ditegakkan di sisi service, bukan frontend.
 4. **400 — Input validasi Joi gagal**: semua field yang salah dilaporkan sekaligus (`abortEarly: false`), pesan berbahasa Indonesia dan menyebut nama field.
+5. **403 — Notifikasi Midtrans dengan `signature_key` tidak sah ditolak** (POST `/api/v1/payments/notification`): status Premium **hanya** boleh naik lewat webhook server-to-server yang lolos verifikasi SHA-512 `SHA512(order_id + status_code + gross_amount + SERVER_KEY)` — bukan dari klaim sisi klien/redirect. Ini mencegah pengguna memalsukan pembayaran agar menjadi Premium.
 
 ---
 
@@ -144,7 +147,7 @@ Digunakan oleh **Admin System** untuk mengelola master data: menambah/mengubah g
 
 **Alasan membutuhkan service ini:** Admin tidak boleh mengakses database langsung. SPA butuh API yang seragam dan tervalidasi untuk CRUD master data, dan service inilah yang menjamin aturan bisnis (mis. exercise yang masih dipakai tidak bisa dihapus) tetap dijaga terlepas dari siapa yang memanggil.
 
-### 4.2 Mobile App Tracker Client (Flutter / React Native)
+### 4.2 Mobile App Tracker Client 
 
 Digunakan oleh **pengguna akhir (Free & Premium)** untuk mencatat log latihan harian, memanggil klaim rekomendasi latihan (termasuk yang digenerate Gemini AI), dan menampilkan grafik riwayat kalori dari kalender aktivitas.
 
@@ -191,8 +194,22 @@ Saat ini kredensial (connection string MySQL, `GEMINI_API_KEY`, dsb.) disimpan d
 
 - **Nested resource:** `GET /api/v1/users/:id/workout-logs` (butir 2).
 - **List + filter + sort + pagination:** `GET /api/v1/exercises?kategori=lower-body&keyword=squat&sort=kalori_per_menit&order=desc&limit=10&offset=0` — diproses dengan `Op` Sequelize, bukan `.filter()` JavaScript (butir 2 & 3).
-- **Include dengan kolom pivot:** `GET /api/v1/workout-logs/:id` me-eager-load `workout_details` (lewat `belongsToMany` + `through`) sehingga `set`, `repetition`, `kalori_terbakar` milik pivot ikut ter-display; dibuktikan bebas N+1 dengan log SQL satu query (butir 3 — log SQL disertakan saat implementasi).
+- **Include dengan kolom pivot + BEBAS N+1:** `GET /api/v1/workout-logs/:id` me-eager-load `user` + `exercises` beserta **kolom milik pivot** (`set`, `repetition`, `durasi_menit`, `kalori_terbakar`) lewat `belongsToMany` + `through`. **Bukti bebas N+1** — satu request menghasilkan **SATU** `SELECT` dengan JOIN (lihat `…` = daftar kolom dielipsis), bukan satu query per baris:
+
+  ```sql
+  SELECT `WorkoutLog`.`id`, … , `exercises->WorkoutDetail`.`set` AS `exercises.WorkoutDetail.set`, …
+  FROM `workout_logs` AS `WorkoutLog`
+  LEFT OUTER JOIN `users` AS `user`
+    ON `WorkoutLog`.`user_id` = `user`.`id` AND (`user`.`deleted_at` IS NULL)
+  LEFT OUTER JOIN ( `workout_details` AS `exercises->WorkoutDetail`
+    INNER JOIN `exercises` AS `exercises`
+      ON `exercises`.`id` = `exercises->WorkoutDetail`.`exercise_id` )
+    ON `WorkoutLog`.`id` = `exercises->WorkoutDetail`.`workout_log_id`
+  WHERE `WorkoutLog`.`id` = 1;
+  ```
+
+  Diamat dari log `sequelize` (`logging: true` saat pengembangan): hanya **1 baris `[SQL] Executing`** untuk request include ini — tidak ada query tambahan saat membaca `exercises` tiap log.
 - **Model feature:** `User` memakai `paranoid: true` (soft delete, kolom `deleted_at`), `WorkoutLog` memakai `DataTypes.VIRTUAL` untuk `jumlah_gerakan`, `Exercise` memakai `validate` (butir 3).
-- **Dual implementation:** endpoint `GET /api/v1/workout-logs/statistik` ditulis dua kali — versi ORM (sequelize-models) dan versi `sequelize.query()` dengan `replacements`. Yang dipakai di production adalah **versi raw query**, karena agregasi multi-tabel (SUM total_kalori per minggu + streak konsistensi) menghasilkan SQL yang lebih ringkas dan terukur plan-nya dibanding rantainya `findAll` + `reduce` di JavaScript; versi ORM dipertahankan sebagai pembanding dan dokumentasi (butir 3).
+- **Dual implementation (keduanya NYATA di kode, bisa diuji berdampingan):** endpoint `GET /api/v1/workout-logs/statistik` punya **dua implementasi** di `workoutLogController.js` — `statistikVersiRaw()` (default; `sequelize.query()` dengan `replacements`) dan `statistikVersiORM()` (pembanding; `WorkoutLog.findAll` + agregasi `reduce` + `WorkoutDetail.count({ distinct: true, col: "exercise_id" })`). Versi ORM dipanggil lewat `?mode=orm`. **Yang dipakai production = raw**, karena agregasi (COUNT/SUM/AVG + `COUNT(DISTINCT)`) lebih ringkas & jelas plan-nya di DB daripada menarik semua baris ke JS. Catatan: agregasi sesi pada versi raw **sengaja TIDAK di-join** ke `workout_details` agar `COUNT`/`SUM` tidak fan-out (terhitung ganda). **Kedua versi mengembalikan angka identik** — teruji user 1 → `total_sesi=2, total_kalori=46.6, rata_kalori_per_sesi=23.3, gerakan_divariasikan=3` (raw & orm).
 - **Integrasi Gemini:** panggilan keluar memakai `axios` dengan key dari `.env`; response upstream **tidak diteruskan apa adanya** — field teks AI diurai, dicocokkan dengan `exercises` di DB, dan dikeluarkan ulang dalam skema JSON service kita; timeout/non-2xx/network error dijawab **504/502** dengan fallback template dari DB sesuai status akun, server tidak pernah crash atau menggantung (butir 5).
 - **Raw query** selalu memakai `replacements`/bind — tidak ada penempelan nilai langsung ke string SQL.

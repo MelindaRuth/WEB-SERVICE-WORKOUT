@@ -146,6 +146,15 @@ Prefix dasar: **`/api/v1`**. Format response konsisten:
 |--------|-------------------------------------|-----------------------------------------------------------------|--------|--------------------------------|
 | `POST` | `/api/v1/recommendations/generate`  | Free → template DB (200). Premium → Gemini; upstream gagal → fallback | 200 | 400, 404 (user), **502/504** (upstream) |
 
+### Payments (`/api/v1/payments`) — integrasi Midtrans (Snap)
+
+| Method | Path                            | Deskripsi                                                                 | Sukses | Error                                        |
+|--------|---------------------------------|---------------------------------------------------------------------------|--------|----------------------------------------------|
+| `POST` | `/api/v1/payments/transaction`  | Buat transaksi upgrade premium → `snap_token` + `redirect_url` (order_id `PREM-<user_id>-<ts>`) | 201    | 400 (validasi), 404 (user), 409 (sudah premium), **502** (Midtrans tak terjangkau), 503 (key kosong) |
+| `POST` | `/api/v1/payments/notification` | **Webhook** Midtrans; verifikasi `signature_key` (SHA-512) → `settlement`/`capture` menaikkan `is_premium` (idempoten) | 200    | 400 (nominal/order_id), **403** (signature salah) |
+
+> Tidak ada method lain pada kedua path ini — `GET` menghasilkan **405** dengan header `Allow: POST`.
+
 ### Info
 
 | Method | Path | Deskripsi                    | Sukses |
@@ -158,8 +167,8 @@ Prefix dasar: **`/api/v1`**. Format response konsisten:
 
 Berkas di folder [`postman/`](./postman):
 
-- `workout-tracker.postman_collection.json` — **42 request** tersusun rapi per folder.
-- `local.postman_environment.json` — environment dengan `baseUrl`.
+- `workout-tracker.postman_collection.json` — **54 request** tersusun rapi per folder (00-Info s.d. **06-Payments**), **seluruhnya punya test**.
+- `local.postman_environment.json` — environment dengan `baseUrl`, `MIDTRANS_SERVER_KEY`, & `premiumAmount`.
 
 **Cara pakai:** Postman → **Import** → pilih kedua berkas → pilih environment
 *Workout Tracker - Local*. Pastikan server hidup (`npm start`), lalu **Runner**
@@ -176,6 +185,16 @@ Yang diuji otomatis (tab **Tests**):
   `is_premium:true`; test menegaskan `isAdmin` **tidak** muncul, `is_premium`
   **dipaksa false**, dan `password` **tidak pernah** dibocorkan di response.
 - **Kolom pivot**: reading `set`/`repetition` pada `workout_details` (via `detail.get("set")`).
+- **Bukti Butir 3 & 4 (request tambahan)**: `GET /workout-logs/statistik` **RAW vs `?mode=orm`**
+  (test membandingkan angka **identik** — parity dual-implementation), `GET /workout-logs/1`
+  (bukti **N+1**: cukup 1 query SELECT+JOIN, terlihat di log `[SQL]` server), dan `POST /users`
+  ber-**body JSON rusak** → 400 pesan aman (bukti **tidak membocorkan stack/SQL** ke klien).
+- **Webhook Midtrans (folder 06 - Payments)**: skenario **Free → Premium didemokan LOKAL** tanpa menyentuh
+  Midtrans — **Pre-request script (CryptoJS)** menghitung `signature_key = SHA512(order_id + status_code +
+  gross_amount + MIDTRANS_SERVER_KEY)` secara otomatis, jadi notifikasi `settlement` diterima (200) dan user
+  naik premium (terverifikasi via `GET /users/:id`). Uji lain: 400 (tanpa `user_id`), 404 (user tak ada),
+  405 (`GET /transaction`), 403 (signature palsu). Permintaan `transaction` sukses **201** hanya bila
+  `MIDTRANS_SERVER_KEY` diisi kunci sandbox asli; tanpa itu membalas **502** (test menerima keduanya).
 
 > Catatan: dengan `GEMINI_API_KEY` berupa placeholder, request Premium sengaja
 > membalas **502** (`UPSTREAM_ERROR`) + `fallback_database` — ini membuktikan

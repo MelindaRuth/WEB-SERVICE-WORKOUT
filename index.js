@@ -19,6 +19,7 @@ const {
   exerciseRouter,
   workoutLogRouter,
   recommendationRouter,
+  paymentRouter,
 } = require("./src/routes");
 const { testConnection, syncDatabase } = require("./src/config/database");
 
@@ -47,6 +48,8 @@ app.get("/", (req, res) =>
       "/api/v1/workout-logs/:id",
       "/api/v1/workout-logs/statistik",
       "/api/v1/recommendations/generate",
+      "/api/v1/payments/transaction",
+      "/api/v1/payments/notification",
     ],
   })
 );
@@ -55,6 +58,7 @@ app.use("/api/v1/users", userRouter);
 app.use("/api/v1/exercises", exerciseRouter);
 app.use("/api/v1/workout-logs", workoutLogRouter);
 app.use("/api/v1/recommendations", recommendationRouter);
+app.use("/api/v1/payments", paymentRouter);
 
 /* ------------------------------------------------------------------ */
 /* 3. PENANGKAP PALING BAWAH (HARUS setelah semua router)             */

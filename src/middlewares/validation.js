@@ -306,6 +306,22 @@ const recommendationSchema = Joi.object({
 });
 
 /* ================================================================== */
+/* SKEMA PAYMENT (integrasi Midtrans)                                  */
+/* ================================================================== */
+
+// POST /api/v1/payments/transaction — klien hanya mengirim user_id target.
+// order_id, nominal, dan item dibangun sendiri oleh controller (tidak
+// pernah diambil dari body) supaya tidak bisa dimanipulasi dari luar.
+const paymentCreateSchema = Joi.object({
+  user_id: Joi.number().integer().positive().required().messages({
+    "any.required": "Field user_id wajib diisi",
+    "number.base": "Field user_id harus berupa angka",
+    "number.integer": "Field user_id harus bilangan bulat",
+    "number.positive": "Field user_id harus lebih dari 0",
+  }),
+});
+
+/* ================================================================== */
 /* FACTORY MIDDLEWARE                                                  */
 /* ================================================================== */
 
@@ -350,5 +366,6 @@ module.exports = {
     exerciseUpdateSchema,
     workoutLogCreateSchema,
     recommendationSchema,
+    paymentCreateSchema,
   },
 };

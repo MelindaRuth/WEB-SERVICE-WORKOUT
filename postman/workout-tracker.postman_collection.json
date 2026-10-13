@@ -50,6 +50,41 @@
       "key": "logId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "payUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notifOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notifGross",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notifSignature",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "snapToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paySnapUrl",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "premiumAmount",
+      "value": "25000",
+      "type": "string"
     }
   ],
   "item": [
@@ -335,6 +370,44 @@
                 "exec": [
                   "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
                   "pm.collectionVariables.set(\"freeUserId\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /users - BODY JSON RUSAK -> 400 (tanpa bocor stack)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"nama\": \"putus",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"pesan aman\", () => pm.expect(pm.response.json().message).to.eql(\"Body permintaan bukan JSON yang valid\"));",
+                  "pm.test(\"tanpa bocor internal\", () => {",
+                  "    const raw = pm.response.text();",
+                  "    [\"Expected\",\"Unexpected\",\"entity.parse.failed\",\"node_modules\"].forEach(b => pm.expect(raw, \"bocor: \" + b).to.not.include(b));",
+                  "});"
                 ]
               }
             }
@@ -985,6 +1058,68 @@
               }
             }
           ]
+        },
+        {
+          "name": "GET /workout-logs/statistik - RAW (user_id=1)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/workout-logs/statistik?user_id=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"RAW 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"statRaw\", JSON.stringify(pm.response.json().data));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workout-logs/statistik - ORM (user_id=1, parity)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/workout-logs/statistik?user_id=1&mode=orm"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"ORM 200\", () => pm.response.to.have.status(200));",
+                  "const raw = JSON.parse(pm.collectionVariables.get(\"statRaw\"));",
+                  "pm.test(\"RAW == ORM (parity)\", () => pm.expect(pm.response.json().data).to.eql(raw));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workout-logs/1 (bukti N+1)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/workout-logs/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"include exercises + kolom pivot\", () => {",
+                  "    pm.expect(Array.isArray(j.data.exercises)).to.be.true;",
+                  "    pm.expect(j.data.exercises[0].WorkoutDetail).to.have.property(\"set\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1045,6 +1180,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"200 (AI ok) ATAU 502/504 (fallback upstream)\", () => pm.expect([200, 502, 504]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) { const j = pm.response.json(); pm.test(\"gabungan AI + katalog lokal (bukan upstream mentah)\", () => { pm.expect(j.data.sumber).to.eql(\"gemini_ai\"); pm.expect(j.data).to.have.property(\"arahan_ai\"); pm.expect(j.data.gerakan_katalog_lokal).to.be.an(\"array\"); pm.expect(pm.response.text()).to.not.include(\"candidates\"); }); }",
                   "if ([502,504].includes(pm.response.code)) { const j = pm.response.json(); pm.test(\"fallback database disertakan\", () => { pm.expect(j.data.sumber).to.eql(\"fallback_database\"); pm.expect(j.data.gerakan).to.be.an(\"array\"); }); }"
                 ]
               }
@@ -1140,6 +1276,331 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "06 - Payments",
+      "description": "Integrasi Midtrans Snap: buat transaksi premium + webhook notification. Skenario Free->Premium bisa didemokan LOKAL (request 05-08) tanpa menyentuh Midtrans, krn signature dihitung di Pre-request. Request 04 (snap_token asli) butuh MIDTRANS_SERVER_KEY sandbox sungguhan; tanpa itu -> 502.",
+      "item": [
+        {
+          "name": "00 - (setup) Registrasi free user untuk demo payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "test-f4670749-7516-450c-9e6b-e774a815e066",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created (setup)\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"payUserId\", j.data.id);",
+                  "pm.test(\"user baru berstatus Free\", () => pm.expect(j.data.is_premium).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nama\": \"Bayu Pratama\",\n  \"email\": \"bayu.pay{{$timestamp}}@gmail.com\",\n  \"umur\": 25,\n  \"berat_badan\": 70,\n  \"tinggi_badan\": 172,\n  \"aktivitas_harian\": \"Sedentary\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": false
+          }
+        },
+        {
+          "name": "01 - Transaksi TANPA user_id (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "test-9eb708d1-7de3-4202-9842-28dca4c732b6",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payments/transaction",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"something_else\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": false
+          }
+        },
+        {
+          "name": "02 - Transaksi user_id TIDAK ADA (expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "test-31bb5fd1-4316-46cc-922a-fa7a5b76a8c5",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 Not Found (validasi sebelum panggil Midtrans)\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payments/transaction",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": 99999999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": false
+          }
+        },
+        {
+          "name": "03 - GET /payments/transaction (expect 405 + Allow)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "test-4341a681-967e-406a-b4f0-b54ab827fa5d",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"405 Method Not Allowed\", () => pm.response.to.have.status(405));",
+                  "pm.test(\"Header Allow = POST\", () => pm.expect(pm.response.headers.get(\"Allow\")).to.eql(\"POST\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payments/transaction"
+          },
+          "response": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": false
+          }
+        },
+        {
+          "name": "04 - Transaksi SUCCESS (butuh Sandbox key; tanpa key = 502)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "test-02823164-435b-4f14-834d-50f76a93dd10",
+                "type": "text/javascript",
+                "exec": [
+                  "const code = pm.response.code;",
+                  "pm.test(\"201 saat key valid ATAU 502 saat Midtrans tak terjangkau\", () => pm.expect([201, 502]).to.include(code));",
+                  "if (code === 201) {",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"snapToken\", j.data.snap_token);",
+                  "pm.collectionVariables.set(\"paySnapUrl\", j.data.redirect_url);",
+                  "pm.test(\"payload snap_token + redirect_url lengkap\", () => {",
+                  "pm.expect(j.data).to.have.property(\"snap_token\");",
+                  "pm.expect(j.data.redirect_url).to.include(\"app.sandbox.midtrans.com\");",
+                  "});",
+                  "} else {",
+                  "pm.test(\"502 tanpa stack trace & pesan rapi\", () => {",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.message).to.be.a(\"string\");",
+                  "pm.expect(j).to.not.have.property(\"stack\");",
+                  "pm.expect(JSON.stringify(j)).to.not.include(\"node_modules\");",
+                  "});",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payments/transaction",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": {{payUserId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": false
+          }
+        },
+        {
+          "name": "05 - Notification SIGNATURE SALAH (expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "test-3751170e-4af0-4c58-96b0-93de48ba9ec7",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"403 Forbidden (anti-spoofing)\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"pesan signature ditolak\", () => pm.expect(pm.response.json().message.toLowerCase()).to.include(\"signature\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payments/notification",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_status\": \"settlement\",\n  \"status_code\": \"200\",\n  \"gross_amount\": \"{{premiumAmount}}.00\",\n  \"order_id\": \"PREM-{{payUserId}}-123\",\n  \"payment_type\": \"gopay\",\n  \"transaction_id\": \"demo-tx-id\",\n  \"signature_key\": \"signature-palsu-abc123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": false
+          }
+        },
+        {
+          "name": "06 - Notification SETTLEMENT (signature valid, expect 200)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "pre-8c829021-d99e-4b95-9b6c-d4aca4257de3",
+                "type": "text/javascript",
+                "exec": [
+                  "// Hitung signature_key persis algoritma Midtrans: SHA512(order_id + status_code + gross_amount + SERVER_KEY)",
+                  "const serverKey = pm.variables.get(\"MIDTRANS_SERVER_KEY\");",
+                  "const amt = (pm.variables.get(\"premiumAmount\") || \"25000\") + \".00\";",
+                  "const orderId = \"PREM-\" + pm.collectionVariables.get(\"payUserId\") + \"-\" + Date.now();",
+                  "const sig = CryptoJS.SHA512(orderId + \"200\" + amt + serverKey).toString(CryptoJS.enc.Hex);",
+                  "pm.variables.set(\"notifOrderId\", orderId);",
+                  "pm.variables.set(\"notifGross\", amt);",
+                  "pm.variables.set(\"notifSignature\", sig);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "id": "test-2ccd4b6e-a3ef-4a1f-8004-cf583cf5bc9a",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK (notifikasi sah diterima)\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"user ditandai PREMIUM oleh webhook\", () => pm.expect(j.data.is_premium).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payments/notification",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_status\": \"settlement\",\n  \"status_code\": \"200\",\n  \"gross_amount\": \"{{notifGross}}\",\n  \"order_id\": \"{{notifOrderId}}\",\n  \"payment_type\": \"gopay\",\n  \"transaction_id\": \"demo-settlement-{{$timestamp}}\",\n  \"signature_key\": \"{{notifSignature}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": false
+          }
+        },
+        {
+          "name": "07 - GET user => sudah FREE menjadi PREMIUM (bukti flip)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "test-59d0285b-245f-4df8-b0ec-dd88b66f7efe",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"is_premium kini true\", () => pm.expect(j.data.is_premium).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/{{payUserId}}"
+          },
+          "response": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": false
+          }
         }
       ]
     }

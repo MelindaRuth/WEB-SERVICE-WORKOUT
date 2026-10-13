@@ -183,17 +183,17 @@ const listUserWorkoutLogs = async (req, res) => {
 
 /* ================================================================== */
 /* GET /api/v1/workout-logs/statistik                                  */
-/* Query: ?user_id= &mulai=YYYY-MM-DD &sampai=YYYY-MM-DD               */
+/* Query: ?user_id= &mulai=YYYY-MM-DD &sampai=YYYY-MM-DD &mode=orm     */
 /*                                                                     */
-/* VERSI RAW QUERY dari endpoint yang sama (butir 3 UTS: satu endpoint  */
-/* ditulis dua kali). Agregasi multi-tabel + GROUP BY minggu jauh lebih */
-/* ringkas & jelas plan-nya di SQL ketimbang findAll lalu reduce di JS. */
-/* WAJIB pakai replacements (bukan tempel nilai ke string) — anti       */
-/* SQL injection. Versi ORM-nya dipertahankan sebagai pembanding di     */
-/* komentar bawah.                                                     */
+/* SATU endpoint, DUA implementasi (butir 3 UTS):                      */
+/*   - ?mode=orm  -> sequelize-models (findAll + agregasi di JS)        */
+/*   - default    -> raw sequelize.query() dengan replacements (dipakai)*/
+/* Raw dipilih untuk production: agregasi multi-tabel + COUNT(DISTINCT)*/
+/* lebih ringkas & jelas plan-nya di SQL daripada findAll + reduce JS. */
+/* Keduanya mengembalikan angka yang sama -> bisa diuji berdampingan.   */
 /* ================================================================== */
 const getStatistik = async (req, res) => {
-  const { user_id, mulai, sampai } = req.query;
+  const { user_id, mulai, sampai, mode } = req.query;
 
   if (!user_id) {
     return res
@@ -201,6 +201,22 @@ const getStatistik = async (req, res) => {
       .json({ status: "fail", message: "Parameter query user_id wajib diisi" });
   }
 
+  const pakaiORM = String(mode).toLowerCase() === "orm";
+  const data = pakaiORM
+    ? await statistikVersiORM({ user_id, mulai, sampai })
+    : await statistikVersiRaw({ user_id, mulai, sampai });
+
+  return res.status(200).json({
+    status: "success",
+    versi: pakaiORM ? "orm" : "raw",
+    user_id: Number(user_id),
+    rentang: { mulai: mulai || null, sampai: sampai || null },
+    data,
+  });
+};
+
+/* ---- Implementasi RAW (YANG DIPAKAI di production; agregasi di DB) ---- */
+const statistikVersiRaw = async ({ user_id, mulai, sampai }) => {
   // Bangun filter tanggal secara dinamis TAPI tetap lewat replacements.
   const replacements = { userId: Number(user_id) };
   let filterWaktu = "";
@@ -213,41 +229,78 @@ const getStatistik = async (req, res) => {
     replacements.sampai = sampai;
   }
 
-  const sql = `
+  const sqlSesi = `
     SELECT
-      COUNT(wl.id)                              AS total_sesi,
-      COALESCE(SUM(wl.total_kalori), 0)         AS total_kalori,
-      COALESCE(ROUND(AVG(wl.total_kalori), 2), 0) AS rata_kalori_per_sesi,
-      COUNT(DISTINCT wd.exercise_id)            AS gerakan_divariasikan
+      COUNT(wl.id)                                AS total_sesi,
+      COALESCE(SUM(wl.total_kalori), 0)           AS total_kalori,
+      COALESCE(ROUND(AVG(wl.total_kalori), 2), 0) AS rata_kalori_per_sesi
     FROM workout_logs wl
-    LEFT JOIN workout_details wd ON wd.workout_log_id = wl.id
     WHERE wl.user_id = :userId
       ${filterWaktu}
   `;
 
-  const [ringkasan] = await sequelize.query(sql, {
+  // PENTING: agregasi SESI sengaja TIDAK di-join ke workout_details. Kalau
+  // di-join, satu log dengan N detail membuat COUNT/SUM ter-fan-out (terhitung
+  // ganda). Variasi gerakan dihitung terpisah dengan COUNT(DISTINCT).
+  const sqlGerakan = `
+    SELECT COUNT(DISTINCT wd.exercise_id) AS gerakan_divariasikan
+    FROM workout_logs wl
+    JOIN workout_details wd ON wd.workout_log_id = wl.id
+    WHERE wl.user_id = :userId
+      ${filterWaktu}
+  `;
+
+  const [sesi] = await sequelize.query(sqlSesi, {
+    replacements,
+    type: sequelize.Sequelize.QueryTypes.SELECT,
+  });
+  const [gerakan] = await sequelize.query(sqlGerakan, {
     replacements,
     type: sequelize.Sequelize.QueryTypes.SELECT,
   });
 
-  // Penjelasan ORM pembanding (TIDAK dipakai — disimpan untuk dokumentasi):
-  //   const logs = await WorkoutLog.findAll({ where: { user_id, tanggal: {...} }});
-  //   const totalSesi = logs.length;
-  //   const totalKalori = logs.reduce((s, l) => s + Number(l.total_kalori), 0);
-  // Versi ORM menarik SEMUA baris ke JS lalu menghitung di memori; versi raw
-  // menghitung di database. Untuk agregasi, raw menang -> karena itu dipakai.
+  return {
+    total_sesi: Number(sesi.total_sesi),
+    total_kalori: Number(sesi.total_kalori),
+    rata_kalori_per_sesi: Number(sesi.rata_kalori_per_sesi),
+    gerakan_divariasikan: Number(gerakan.gerakan_divariasikan),
+  };
+};
 
-  return res.status(200).json({
-    status: "success",
-    user_id: Number(user_id),
-    rentang: { mulai: mulai || null, sampai: sampai || null },
-    data: {
-      total_sesi: Number(ringkasan.total_sesi),
-      total_kalori: Number(ringkasan.total_kalori),
-      rata_kalori_per_sesi: Number(ringkasan.rata_kalori_per_sesi),
-      gerakan_divariasikan: Number(ringkasan.gerakan_divariasikan),
-    },
+/* ---- Implementasi ORM (PEMBANDING; baris ditarik ke JS lalu diagregasi) ---- */
+const statistikVersiORM = async ({ user_id, mulai, sampai }) => {
+  const where = { user_id: Number(user_id) };
+  if (mulai || sampai) {
+    where.tanggal = {};
+    if (mulai) where.tanggal[Op.gte] = mulai;
+    if (sampai) where.tanggal[Op.lte] = sampai;
+  }
+
+  const logs = await WorkoutLog.findAll({
+    where,
+    attributes: ["id", "total_kalori"],
   });
+
+  const totalSesi = logs.length;
+  const totalKalori = round2(logs.reduce((s, l) => s + Number(l.total_kalori), 0));
+  const rata = totalSesi ? round2(totalKalori / totalSesi) : 0;
+
+  // gerakan_divariasikan = COUNT(DISTINCT exercise_id) pada pivot, versi ORM.
+  const logIds = logs.map((l) => l.id);
+  const gerakan = logIds.length
+    ? await WorkoutDetail.count({
+        where: { workout_log_id: { [Op.in]: logIds } },
+        distinct: true,
+        col: "exercise_id",
+      })
+    : 0;
+
+  return {
+    total_sesi: totalSesi,
+    total_kalori: totalKalori,
+    rata_kalori_per_sesi: rata,
+    gerakan_divariasikan: Number(gerakan),
+  };
 };
 
 module.exports = {
