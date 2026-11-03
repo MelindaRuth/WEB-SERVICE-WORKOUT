@@ -22,6 +22,7 @@ Rancangan lengkap (ERD, kontrak API, aturan bisnis) ada di [`RANCANGAN.md`](./RA
 | bcryptjs   | ^3.0   | Hashing password (10 rounds)            |
 | axios      | ^1.20  | Panggilan keluar ke Gemini              |
 | dotenv     | ^18.0  | Kredensial dari `.env`                  |
+| Bootstrap  | ^5.3   | UI frontend (disajikan dari `node_modules`) |
 
 ---
 
@@ -115,11 +116,20 @@ Prefix dasar: **`/api/v1`**. Format response konsisten:
 | Method   | Path                              | Deskripsi                                   | Sukses | Error                      |
 |----------|-----------------------------------|---------------------------------------------|--------|----------------------------|
 | `POST`   | `/api/v1/users`                   | Registrasi user baru (password di-hash)     | 201    | 400 (validasi), 409 (email)|
+| `POST`   | `/api/v1/users/login`             | **Login**: cocokkan kredensial dengan hash bcrypt (scope `withPassword`) | 200 | 400 (validasi), **401** (email/password salah) |
 | `GET`    | `/api/v1/users`                   | Daftar user: `?is_premium=&sort=&order=&limit=&offset=` | 200 | —        |
 | `GET`    | `/api/v1/users/:id`               | Detail user + workout log-nya               | 200    | 404                        |
 | `PUT`    | `/api/v1/users/:id`               | Update profil / **upgrade premium**         | 200    | 400, 404                   |
 | `DELETE` | `/api/v1/users/:id`               | Soft delete (paranoid)                       | 200    | 404, 409 (masih punya log) |
 | `GET`    | `/api/v1/users/:id/workout-logs`  | **Nested**: log latihan milik satu user      | 200    | 404                        |
+
+> Field profil yang bisa diubah lewat `PUT /users/:id`: `username`, `nama`, `umur`,
+> `gender` (`male`/`female`), `berat_badan`, `tinggi_badan`, `is_premium`. Semua field
+> ini juga tersedia di **halaman Frontend** (modal profil).
+>
+> Login memakai **satu pesan 401** untuk email tak dikenal maupun password salah (tidak
+> membocorkan akun mana yang terdaftar), dicocokkan case-insensitive pada email, dan
+> responsnya tidak pernah memuat `password`.
 
 ### Exercises (`/api/v1/exercises`)
 
@@ -184,6 +194,10 @@ Yang diuji otomatis (tab **Tests**):
 - **Anti mass-assignment**: registrasi dikirim dengan body berisi `isAdmin:true` &
   `is_premium:true`; test menegaskan `isAdmin` **tidak** muncul, `is_premium`
   **dipaksa false**, dan `password` **tidak pernah** dibocorkan di response.
+- **Login (folder 01 - Users)**: `POST /users/login` diuji **200** (akun seed; response tanpa
+  `password`), **401** password salah, **401** email tidak terdaftar dengan **pesan identik**
+  (tidak membocorkan akun mana yang ada), **400** (email salah format + password kosong), dan
+  `GET /users/login` → **405** sebagai bukti rute `/login` terdaftar sebelum `/:id`.
 - **Kolom pivot**: reading `set`/`repetition` pada `workout_details` (via `detail.get("set")`).
 - **Bukti Butir 3 & 4 (request tambahan)**: `GET /workout-logs/statistik` **RAW vs `?mode=orm`**
   (test membandingkan angka **identik** — parity dual-implementation), `GET /workout-logs/1`
@@ -214,6 +228,11 @@ Yang diuji otomatis (tab **Tests**):
 │   ├── schema.sql           # DDL 4 tabel (cermin src/models)
 │   └── seed.sql             # Data awal (user, exercise, log + pivot)
 ├── postman/                 # Collection + environment
+├── public/                  # Frontend (HTML + CSS + JS, Bootstrap 5, vanilla)
+│   ├── index.html           # Shell SPA: topbar, 4 halaman, bottom nav, 2 modal
+│   ├── css/style.css        # Tema FITAI (dark default + light, mobile-first)
+│   ├── js/                  # api.js, app.js (router & halaman), demo-assets.js
+│   └── assets/demo/         # Rak GIF/video contoh gerakan (lihat bagian 7.2)
 ├── RANCANGAN.md             # Perancangan lengkap sistem
 └── src/
     ├── config/database.js   # instance Sequelize, testConnection, syncDatabase
@@ -226,6 +245,83 @@ Yang diuji otomatis (tab **Tests**):
 Alur permintaan: **route → middleware validasi → controller → model (ORM) → MySQL**.
 `index.js` hanya merakit; tidak ada logika bisnis di route; controller tidak pernah
 menyimpan `req.body` mentah (memakai `req.validated` hasil Joi).
+
+---
+
+## 7.1 Frontend (folder `public/`)
+
+Satu server yang sama menyajikan API **dan** aplikasinya. Bootstrap 5 diambil dari
+`node_modules` (route `/vendor/bootstrap`), jadi tetap jalan tanpa internet; hanya
+font Google yang bersifat opsional.
+
+```bash
+npm run migrate && npm start
+# buka  http://localhost:3000/app   (atau /index.html)
+```
+
+`GET /` tetap mengembalikan JSON informasi service (kontrak Postman tidak berubah);
+UI berada di `/app`.
+
+| Halaman (hash route) | Endpoint yang dipakai                                                            |
+|----------------------|----------------------------------------------------------------------------------|
+| **Auth** (sebelum masuk) | `POST /users/login` (tab MASUK), `POST /users` (tab DAFTAR), lalu `GET /users/:id` |
+| **Home** `#/home`    | `GET /users/:id` (log ikut terbawa) — streak, statistik, weekly activity, body metrics, recent sessions + **toggle dark/light** |
+| **Log** `#/log`      | `GET /exercises`, `POST /exercises` (mode CUSTOM), `POST /workout-logs`            |
+| **AI Coach** `#/coach` | `POST /recommendations/generate` (Free = template DB, Premium = Gemini + fallback 502/504) |
+| **Progress** `#/progress` | `GET /workout-logs/statistik`, `GET /users/:id/workout-logs`, `GET /workout-logs/:id` |
+| **Profil** (tombol kanan atas) | `PUT /users/:id` — username, gender (male/female), umur, berat & tinggi badan |
+
+Catatan implementasi frontend:
+
+- **Dark mode adalah default**; pilihan tema disimpan di `localStorage` (`fitai_theme`).
+- **Login & registrasi diverifikasi server**: layar Auth memakai tab MASUK/DAFTAR dan memanggil
+  `POST /users/login` — password dibandingkan dengan hash bcrypt di backend, jadi kredensial
+  tidak pernah diperiksa di browser.
+- Akun aktif (id user) disimpan di `localStorage` (`fitai_user_id`) sebagai penanda sesi,
+  karena service ini belum memakai JWT; `#btnLogout` menghapusnya.
+- Grid gerakan mendukung **multi-select**: satu klik “LOG” = satu sesi berisi semua gerakan
+  yang dipilih (relasi N:M lewat `workout_details`).
+- Kolom beban (`WEIGHT (KG)`) tidak ada di skema service, maka dikirim sebagai `catatan`
+  sesi, mis. `"@ 8kg"`.
+- Semua teks yang disisipkan ke DOM melewati `esc()` (anti XSS), dan error backend
+  (pesan Joi Bahasa Indonesia) ditampilkan apa adanya lewat toast/modal.
+
+## 7.2 Rak Contoh Gerakan (GIF / Video) di Halaman LOG
+
+Halaman LOG sudah punya rak pratinjau contoh gerakan: panel media dengan rasio 16:9
+(di antara grid gerakan dan input SETS), tombol `▶` di setiap kartu untuk membuka
+versi besar di modal, dan tombol **PERBESAR**. Rak ini sengaja dibuat *siap-aset*:
+kalau file belum tersedia, yang muncul hanyalah placeholder berisi emoji + lokasi
+file yang harus diisi, sehingga ukuran layout tidak berubah.
+
+Cara menambahkan aset (pilih salah satu, tanpa mengubah kode UI):
+
+1. **Konvensi nama file** — taruh aset di `public/assets/demo/` dengan nama slug
+   latihan: `squat.gif`, `dumbbell-curl.mp4`, `treadmill.webm`. UI menguji ekstensi
+   berurutan `.gif → .mp4 → .webm` lewat HEAD request yang hasilnya di-cache,
+   jadi satu file yang belum ada hanya diperiksa sekali per sesi.
+2. **Peta eksplisit** pada `DEMO_ASSETS` di `public/js/demo-assets.js` — dipakai bila
+   nama file tidak mengikuti konvensi atau asetnya URL eksternal:
+
+```js
+const DEMO_ASSETS = {
+  "dumbbell curl": { src: "/assets/demo/bicep.gif" },
+  "treadmill":     { src: "/assets/demo/lari.mp4", poster: "/assets/demo/lari.jpg", credit: "Sumber: …" },
+  "plank":         { src: "https://…/plank.gif" },
+};
+```
+
+Catatan implementasi:
+
+- Tipe media ditebak dari ekstensi: `mp4/webm/mov` dirender sebagai
+  `<video controls autoplay muted loop playsinline>`, lainnya sebagai `<img>` (GIF).
+- Pratinjau mengikuti kartu yang dipilih / yang sedang mendapat fokus keyboard, dan
+  juga nama yang sedang diketik saat mode CUSTOM aktif.
+- Token async terpisah untuk rak dan modal, sehingga hasil probe lama tidak menimpa
+  tampilan yang baru.
+- `public/assets/demo/_sample-squat.svg` hanyalah animasi contoh (placeholder) untuk
+  membuktikan jalur render bekerja — hapus entri `squat` di `DEMO_ASSETS` begitu GIF
+  gerakan yang sebenarnya dimasukkan.
 
 ---
 

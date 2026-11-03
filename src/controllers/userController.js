@@ -19,19 +19,37 @@ const { User, WorkoutLog } = require("../models");
 // Biaya hashing bcrypt. 10 adalah keseimbangan wajar aman-cepat untuk API.
 const BCRYPT_ROUNDS = 10;
 
+// Hash asli dari password tiruan. Dipakai saat email tidak dikenal supaya
+// bcrypt tetap bekerja dan waktu respons tidak membocorkan akun mana yang ada.
+const HASH_TANDINGAN = "$2b$10$ZI7bfwadsb8t7jh9PLr/q.EBSQM7Rb2tiqR3Lpf8rG6IsZJet6Iqm";
+
 // Whitelist kolom sort. Nama kolom ORDER BY tidak bisa jadi bound value
 // (di ORM maupun SQL mentah), jadi HARUS disaring — cegah injeksi.
-const KOLOM_SORT_BOLEH = ["id", "nama", "is_premium", "createdAt"];
+const KOLOM_SORT_BOLEH = ["id", "username", "nama", "is_premium", "createdAt"];
 
 /* ================================================================== */
 /* POST /api/v1/users                                                  */
 /* ================================================================== */
 const registerUser = async (req, res) => {
   // Bangun ulang objek dari field yang lolos Joi — JANGAN req.body mentah.
-  const { nama, email, password, berat_badan, tinggi_badan } = req.validated;
+  const {
+    username: usernameInput,
+    nama,
+    email,
+    password,
+    umur,
+    gender,
+    berat_badan,
+    tinggi_badan,
+  } = req.validated;
+
+  // Username boleh tidak dikirim saat registrasi -> turunkan dari prefix
+  // email (mis. "sari@test.com" -> "sari"). Model menormalisasi ke lowercase.
+  const username = (usernameInput || email.split("@")[0] || nama).toLowerCase();
 
   // Aturan bisnis: email tidak boleh kembar (lapis pertama; UNIQUE KEY &
-  // validasi model jadi jaring kedua & ketiga).
+  // validasi model jadi jaring kedua & ketiga). DICEK PALING AWAL supaya
+  // pesan konflik tetap sama seperti kontrak API lama.
   const kembar = await User.findOne({
     where: rawWhere(fn("LOWER", col("email")), email.toLowerCase()),
   });
@@ -41,6 +59,16 @@ const registerUser = async (req, res) => {
       .json({ status: "fail", message: `Email ${email} sudah terdaftar` });
   }
 
+  // Aturan bisnis 409: username tidak boleh kembar.
+  const usernameKembar = await User.findOne({
+    where: rawWhere(fn("LOWER", col("username")), username),
+  });
+  if (usernameKembar) {
+    return res
+      .status(409)
+      .json({ status: "fail", message: `Username ${username} sudah dipakai` });
+  }
+
   // Password di-HASH sebelum disentuh database (butir 4: lindungi kredensial).
   // Model TIDAK tahu mekanisme hashing — ini tanggung jawab controller.
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
@@ -48,9 +76,12 @@ const registerUser = async (req, res) => {
   // Registrasi biasa SELALU mulai sebagai user Free. Field is_premium dari
   // body DIABAIKAN; upgrade premium hanya lewat jalur Update User (Admin/bayar).
   const userBaru = await User.create({
+    username,
     nama,
     email,
     password: passwordHash,
+    umur,
+    gender,
     berat_badan,
     tinggi_badan,
     is_premium: false,
@@ -65,6 +96,36 @@ const registerUser = async (req, res) => {
     .status(201)
     .location(`/api/v1/users/${userBaru.id}`)
     .json({ status: "success", message: "User berhasil didaftarkan", data: tanpaPassword });
+};
+
+/* ================================================================== */
+/* POST /api/v1/users/login                                            */
+/* ================================================================== */
+const loginUser = async (req, res) => {
+  const { email, password } = req.validated;
+
+  // defaultScope menyembunyikan `password`, jadi hash diminta lewat scope
+  // khusus `withPassword`. Hash tidak pernah ikut ke dalam response.
+  const user = await User.scope("withPassword").findOne({
+    where: rawWhere(fn("LOWER", col("email")), email.toLowerCase()),
+  });
+
+  // Satu pesan untuk email tak dikenal DAN password salah: respons tidak boleh
+  // membocorkan akun mana yang terdaftar.
+  const passwordCocok = await bcrypt.compare(password, user ? user.password : HASH_TANDINGAN);
+  if (!user || !passwordCocok) {
+    return res
+      .status(401)
+      .json({ status: "fail", message: "Email atau password salah" });
+  }
+
+  const { password: _buang, ...tanpaPassword } = user.get({ plain: true });
+
+  return res.status(200).json({
+    status: "success",
+    message: `Login berhasil, selamat datang ${user.username || user.nama}`,
+    data: tanpaPassword,
+  });
 };
 
 /* ================================================================== */
@@ -83,7 +144,18 @@ const getAllUsers = async (req, res) => {
 
   const { count: total, rows } = await User.findAndCountAll({
     where: Object.keys(kondisi).length ? kondisi : undefined,
-    attributes: ["id", "nama", "email", "is_premium", "berat_badan", "tinggi_badan", "createdAt"],
+    attributes: [
+      "id",
+      "username",
+      "nama",
+      "email",
+      "is_premium",
+      "umur",
+      "gender",
+      "berat_badan",
+      "tinggi_badan",
+      "createdAt",
+    ],
     order: [
       [KOLOM_SORT_BOLEH.includes(sort) ? sort : "id", order === "desc" ? "DESC" : "ASC"],
     ],
@@ -178,6 +250,7 @@ const deleteUser = async (req, res) => {
 
 module.exports = {
   registerUser,
+  loginUser,
   getAllUsers,
   getUserById,
   updateUser,

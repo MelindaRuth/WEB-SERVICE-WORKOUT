@@ -42,7 +42,7 @@ const round2 = (n) => Math.round(Number(n) * 100) / 100;
 const getLogLengkap = async (id) =>
   WorkoutLog.findByPk(Number(id), {
     include: [
-      { model: User, as: "user", attributes: ["id", "nama", "email", "is_premium"] },
+      { model: User, as: "user", attributes: ["id", "username", "nama", "email", "is_premium"] },
       {
         model: Exercise,
         as: "exercises",
@@ -155,7 +155,7 @@ const listUserWorkoutLogs = async (req, res) => {
   const { id } = req.params;
   const { sort, order, limit, offset } = req.query;
 
-  const user = await User.findByPk(id, { attributes: ["id", "nama"] });
+  const user = await User.findByPk(id, { attributes: ["id", "username", "nama"] });
   if (!user) {
     return res
       .status(404)

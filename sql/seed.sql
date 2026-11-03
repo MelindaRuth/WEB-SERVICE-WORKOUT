@@ -22,17 +22,17 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 -- ---- users -----------------------------------------------------------------
 INSERT INTO `users`
-  (`id`, `nama`, `email`, `password`, `is_premium`, `berat_badan`, `tinggi_badan`, `created_at`, `updated_at`, `deleted_at`)
+  (`id`, `nama`, `username`, `email`, `password`, `is_premium`, `umur`, `gender`, `berat_badan`, `tinggi_badan`, `created_at`, `updated_at`, `deleted_at`)
 VALUES
-  (1, 'Sari Wibowo', 'sari@test.com',
+  (1, 'Sari Wibowo', 'sari', 'sari@test.com',
       '$2b$10$RnmzCO/TlujrwKu.jis0G..8X8KytdbQEEYBE4h0TDAMiPqqnLPeK',
-      1, 62.50, 165.00, NOW(), NOW(), NULL),
-  (2, 'Andi Pratama', 'andi@test.com',
+      1, 24, 'female', 62.50, 165.00, NOW(), NOW(), NULL),
+  (2, 'Andi Pratama', 'andi', 'andi@test.com',
       '$2b$10$5iF8/AsXPPS1c.CcrXjx2eylON3gf4Fm2/Z7RwJCQNnEt3A7rtkpy',
-      0, 70.00, 172.00, NOW(), NOW(), NULL),
-  (3, 'Bima Saputra', 'bima@test.com',
+      0, 27, 'male', 70.00, 172.00, NOW(), NOW(), NULL),
+  (3, 'Bima Saputra', 'bima', 'bima@test.com',
       '$2b$10$5iF8/AsXPPS1c.CcrXjx2eylON3gf4Fm2/Z7RwJCQNnEt3A7rtkpy',
-      0, NULL, NULL, NOW(), NOW(), NULL);
+      0, NULL, NULL, NULL, NULL, NOW(), NOW(), NULL);
 
 -- ---- exercises -------------------------------------------------------------
 --   3 gerakan gratis + 2 gerakan premium-only + variasi kategori untuk filter.
@@ -45,22 +45,42 @@ VALUES
   (4, 'Lari Santai',    'cardio',    10.00,  0, NOW(), NOW()),
   (5, 'Burpee',         'full body', 12.00,  0, NOW(), NOW()),
   (6, 'Muscle Up Ring', 'upper body',11.00,  1, NOW(), NOW()),
-  (7, 'Dragon Flag',    'core',       9.50,  1, NOW(), NOW());
+  (7, 'Dragon Flag',    'core',       9.50,  1, NOW(), NOW()),
+  (8, 'Dumbbell Curl',  'upper body', 6.00,  0, NOW(), NOW()),
+  (9, 'Glute Bridge',   'lower body', 6.50,  0, NOW(), NOW()),
+  (10, 'Sumo Squat',    'lower body', 8.50,  0, NOW(), NOW()),
+  (11, 'Treadmill',     'cardio',     9.00,  0, NOW(), NOW()),
+  (12, 'Dumbbell Row',  'upper body', 7.50,  0, NOW(), NOW()),
+  (13, 'Lunges',        'lower body', 7.00,  0, NOW(), NOW());
 
--- ---- workout_logs (2 sesi milik user 1 / Premium) --------------------------
+-- ---- workout_logs (4 sesi milik user 1 / Premium) --------------------------
+--   Tanggal dibuat RELATIF terhadap hari berjalan (CURDATE()) supaya streak,
+--   "weekly activity" dan riwayat di frontend langsung terlihat hidup.
 INSERT INTO `workout_logs`
   (`id`, `user_id`, `tanggal`, `total_kalori`, `catatan`, `created_at`, `updated_at`)
 VALUES
-  (1, 1, '2026-10-01', 22.60, 'Push Up 3x12 + Plank 2 menit', NOW(), NOW()),
-  (2, 1, '2026-10-03', 24.00, 'Hari kaki: Squat 4x15', NOW(), NOW());
+  (1, 1, DATE_SUB(CURDATE(), INTERVAL 6 DAY), 22.60, 'Push Up 3x12 + Plank 2 menit', NOW(), NOW()),
+  (2, 1, DATE_SUB(CURDATE(), INTERVAL 5 DAY), 24.00, 'Hari kaki: Squat 4x15', NOW(), NOW()),
+  (3, 1, DATE_SUB(CURDATE(), INTERVAL 1 DAY), 120.30, '@ 8kg', NOW(), NOW()),
+  (4, 1, CURDATE(),                            41.86, 'Ringan tapi konsisten', NOW(), NOW());
 
 -- ---- workout_details (pivot: kolom set/repetition/durasi_menit/kalori) ------
---   Log 1: Push Up  set=3 rep=12 -> 3*12*3/60 = 1.80 mnt * 7.00 = 12.60
---          Plank   durasi=2 mnt            -> 2 * 5.00          = 10.00  (total 22.60)
---   Log 2: Squat   set=4 rep=15 -> 4*15*3/60 = 3.00 mnt * 8.00  = 24.00  (total 24.00)
+--   Log 1: Push Up  set=3 rep=12 -> 1.80 mnt * 7.00 = 12.60
+--          Plank   durasi=2 mnt  -> 2 * 5.00        = 10.00   (total 22.60)
+--   Log 2: Squat   set=4 rep=15 -> 3.00 mnt * 8.00  = 24.00   (total 24.00)
+--   Log 3: Dumbbell Curl 3x12 -> 1.80 * 6.00 = 10.80 ; Glute Bridge 3x20 -> 3.00 * 6.50 = 19.50
+--          Treadmill 10 menit -> 10 * 9.00 = 90.00                              (total 120.30)
+--   Log 4: Lunges 3x12 -> 1.80 * 7.00 = 12.60 ; Sumo Squat 3x15 -> 2.25 * 8.50 = 19.13
+--          Dumbbell Row 3x10 -> 1.35 * 7.50 = 10.13                              (total 41.86)
 INSERT INTO `workout_details`
   (`id`, `workout_log_id`, `exercise_id`, `set`, `repetition`, `durasi_menit`, `kalori_terbakar`)
 VALUES
-  (1, 1, 1, 3, 12,   NULL, 12.60),
-  (2, 1, 3, 1, NULL,    2, 10.00),
-  (3, 2, 2, 4, 15,   NULL, 24.00);
+  (1, 1, 1,  3, 12,   NULL, 12.60),
+  (2, 1, 3,  1, NULL,    2, 10.00),
+  (3, 2, 2,  4, 15,   NULL, 24.00),
+  (4, 3, 8,  3, 12,   NULL, 10.80),
+  (5, 3, 9,  3, 20,   NULL, 19.50),
+  (6, 3, 11, 1, NULL,   10, 90.00),
+  (7, 4, 13, 3, 12,   NULL, 12.60),
+  (8, 4, 10, 3, 15,   NULL, 19.13),
+  (9, 4, 12, 3, 10,   NULL, 10.13);

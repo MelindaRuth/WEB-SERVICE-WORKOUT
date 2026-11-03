@@ -24,6 +24,18 @@ const Joi = require("joi");
 
 // POST /api/v1/users — registrasi.
 const userRegisterSchema = Joi.object({
+  username: Joi.string()
+    .trim()
+    .min(3)
+    .max(50)
+    .optional()
+    .messages({
+      "string.empty": "Field username tidak boleh kosong",
+      "string.min": "Field username minimal 3 karakter",
+      "string.max": "Field username maksimal 50 karakter",
+      "string.base": "Field username harus berupa teks",
+    }),
+
   nama: Joi.string()
     .trim()
     .min(3)
@@ -60,6 +72,18 @@ const userRegisterSchema = Joi.object({
       "string.base": "Field password harus berupa teks",
     }),
 
+  umur: Joi.number().integer().min(10).max(120).optional().allow(null).messages({
+    "number.base": "Field umur harus berupa angka",
+    "number.integer": "Field umur harus bilangan bulat",
+    "number.min": "Field umur tidak masuk akal (minimal 10 tahun)",
+    "number.max": "Field umur tidak masuk akal (maksimal 120 tahun)",
+  }),
+
+  gender: Joi.string().trim().valid("male", "female").optional().allow(null).messages({
+    "any.only": "Field gender harus salah satu dari: male, female",
+    "string.base": "Field gender harus berupa teks",
+  }),
+
   berat_badan: Joi.number()
     .min(20)
     .max(300)
@@ -85,9 +109,44 @@ const userRegisterSchema = Joi.object({
   // nyobanya, dan controller memaksa false. Upgrade hanya via Update User.
 });
 
+// POST /api/v1/users/login — hanya kredensial, tidak ada field profil.
+// Password TIDAK diberi min(): panjang minimal hanya aturan saat registrasi,
+// supaya akun lama tetap bisa masuk kalau policy panjang berubah nanti.
+const userLoginSchema = Joi.object({
+  email: Joi.string()
+    .trim()
+    .email({ tlds: { allow: false } })
+    .required()
+    .messages({
+      "any.required": "Field email wajib diisi",
+      "string.empty": "Field email tidak boleh kosong",
+      "string.email": "Field email harus berupa alamat email yang valid",
+      "string.base": "Field email harus berupa teks",
+    }),
+
+  password: Joi.string().max(72).required().messages({
+    "any.required": "Field password wajib diisi",
+    "string.empty": "Field password tidak boleh kosong",
+    "string.max": "Field password maksimal 72 karakter",
+    "string.base": "Field password harus berupa teks",
+  }),
+});
+
 // PUT /api/v1/users/:id — update profil. Email & password TIDAK diubah
 // lewat endpoint ini (jalur riêng / tidak di sini).
 const userUpdateSchema = Joi.object({
+  username: Joi.string()
+    .trim()
+    .min(3)
+    .max(50)
+    .optional()
+    .messages({
+      "string.empty": "Field username tidak boleh kosong",
+      "string.min": "Field username minimal 3 karakter",
+      "string.max": "Field username maksimal 50 karakter",
+      "string.base": "Field username harus berupa teks",
+    }),
+
   nama: Joi.string()
     .trim()
     .min(3)
@@ -98,6 +157,29 @@ const userUpdateSchema = Joi.object({
       "string.min": "Field nama minimal 3 karakter",
       "string.max": "Field nama maksimal 100 karakter",
       "string.base": "Field nama harus berupa teks",
+    }),
+
+  umur: Joi.number()
+    .integer()
+    .min(10)
+    .max(120)
+    .optional()
+    .allow(null)
+    .messages({
+      "number.base": "Field umur harus berupa angka",
+      "number.integer": "Field umur harus bilangan bulat",
+      "number.min": "Field umur tidak masuk akal (minimal 10 tahun)",
+      "number.max": "Field umur tidak masuk akal (maksimal 120 tahun)",
+    }),
+
+  gender: Joi.string()
+    .trim()
+    .valid("male", "female")
+    .optional()
+    .allow(null)
+    .messages({
+      "any.only": "Field gender harus salah satu dari: male, female",
+      "string.base": "Field gender harus berupa teks",
     }),
 
   berat_badan: Joi.number()
@@ -361,6 +443,7 @@ module.exports = {
   KATEGORI,
   schemas: {
     userRegisterSchema,
+    userLoginSchema,
     userUpdateSchema,
     exerciseCreateSchema,
     exerciseUpdateSchema,

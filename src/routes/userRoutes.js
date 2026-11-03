@@ -14,6 +14,7 @@ const { validate, schemas } = require("../middlewares/validation");
 
 const {
   registerUser,
+  loginUser,
   getAllUsers,
   getUserById,
   updateUser,
@@ -27,6 +28,14 @@ router
   .get(getAllUsers)
   .post(validate(schemas.userRegisterSchema), registerUser)
   .all(methodNotAllowed("GET", "POST"));
+
+// LOGIN: `/login` WAJIB didaftarkan di atas `/:id`, kalau tidak kata "login"
+// akan dianggap sebagai id user dan request ditolak (405/404).
+//   POST /api/v1/users/login  { email, password }
+router
+  .route("/login")
+  .post(validate(schemas.userLoginSchema), loginUser)
+  .all(methodNotAllowed("POST"));
 
 // NESTED RESOURCE: log latihan milik satu user.
 //   GET /api/v1/users/:id/workout-logs

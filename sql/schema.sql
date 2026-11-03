@@ -33,16 +33,20 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE TABLE `users` (
   `id`            INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   `nama`          VARCHAR(100)  NOT NULL,
+  `username`      VARCHAR(50)   NOT NULL,
   `email`         VARCHAR(100)  NOT NULL,
   `password`      VARCHAR(255)  NOT NULL,
   `is_premium`    TINYINT(1)    NOT NULL DEFAULT 0,
+  `umur`          TINYINT UNSIGNED NULL,
+  `gender`        ENUM('male','female') NULL,
   `berat_badan`   DECIMAL(5,2)  NULL,
   `tinggi_badan`  DECIMAL(5,2)  NULL,
   `created_at`    DATETIME      NOT NULL,
   `updated_at`    DATETIME      NOT NULL,
   `deleted_at`    DATETIME      NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `users_email_unique` (`email`)
+  UNIQUE KEY `users_email_unique` (`email`),
+  UNIQUE KEY `users_username_unique` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------

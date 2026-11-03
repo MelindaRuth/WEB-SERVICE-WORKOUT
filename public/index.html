@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="id" data-bs-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>FITAI — AI Workout Tracker</title>
+    <meta name="description" content="AI-Powered Workout & Habit Tracker" />
+
+    <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bungee&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link href="css/style.css" rel="stylesheet" />
+  </head>
+
+  <body>
+    <!-- ============================ TOPBAR ============================ -->
+    <header class="fit-topbar">
+      <div class="fit-brand">
+        <span class="fit-brand-text">FITAI</span>
+      </div>
+      <div class="fit-topbar-right">
+        <button
+          class="fit-icon-btn"
+          id="btnTheme"
+          type="button"
+          title="Ganti tema"
+          aria-label="Ganti mode terang dan gelap"
+        >
+          <span id="themeIcon">🌙</span>
+        </button>
+        <span class="fit-streak-pill"><b id="topStreak">0</b> 🔥</span>
+        <button
+          class="fit-avatar-btn"
+          id="btnProfile"
+          type="button"
+          data-bs-toggle="modal"
+          data-bs-target="#modalProfile"
+          aria-label="Buka profil"
+        >
+          <span id="avatarLetter">F</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ============================ MAIN ============================== -->
+    <main class="fit-main" id="app">
+      <!-- Loader awal -->
+      <div class="fit-loading text-center py-5">
+        <div class="spinner-grow text-success" role="status"></div>
+        <p class="fit-mono mt-3 mb-0">Menghubungkan ke service…</p>
+      </div>
+    </main>
+
+    <!-- ======================= BOTTOM NAVIGATION ====================== -->
+    <nav class="fit-bottomnav" id="bottomnav" hidden>
+      <a href="#/home" class="nav-item" data-route="home"><span>⚡</span>HOME</a>
+      <a href="#/log" class="nav-item" data-route="log"><span>📋</span>LOG</a>
+      <a href="#/coach" class="nav-item" data-route="coach"><span>✦</span>AI COACH</a>
+      <a href="#/progress" class="nav-item" data-route="progress"><span>📈</span>PROGRESS</a>
+    </nav>
+
+    <!-- ====================== TOAST / NOTIFIKASI ====================== -->
+    <div class="position-fixed bottom-0 start-50 translate-middle-x p-3 fit-toast-wrap" style="z-index: 1090">
+      <div id="fitToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body" id="fitToastBody">Pesan</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Tutup"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================= MODAL PROFIL ========================= -->
+    <div class="modal fade" id="modalProfile" tabindex="-1" aria-hidden="true" aria-labelledby="modalProfileLabel">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content fit-card">
+          <div class="modal-header border-0">
+            <h5 class="modal-title fit-display" id="modalProfileLabel">PROFIL</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tutup"></button>
+          </div>
+          <form id="formProfile" novalidate>
+            <div class="modal-body">
+              <div class="fit-mono form-label">USERNAME</div>
+              <input type="text" class="form-control fit-input" id="pfUsername" minlength="3" maxlength="50" required />
+
+              <div class="fit-mono form-label mt-3">GENDER</div>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn fit-chip flex-fill" data-gender="male">♂ Male</button>
+                <button type="button" class="btn fit-chip flex-fill" data-gender="female">♀ Female</button>
+              </div>
+
+              <div class="row g-3 mt-3">
+                <div class="col-6">
+                  <div class="fit-mono form-label">UMUR (THN)</div>
+                  <input type="number" class="form-control fit-input" id="pfUmur" min="10" max="120" step="1" placeholder="—" />
+                </div>
+                <div class="col-6">
+                  <div class="fit-mono form-label">TINGGI (CM)</div>
+                  <input type="number" class="form-control fit-input" id="pfTinggi" min="50" max="250" step="0.5" placeholder="—" />
+                </div>
+              </div>
+
+              <div class="mt-3">
+                <div class="fit-mono form-label">BERAT BADAN (KG)</div>
+                <input type="number" class="form-control fit-input" id="pfBerat" min="20" max="300" step="0.1" placeholder="—" />
+              </div>
+
+              <div class="fit-mono mt-3" id="pfEmail" style="opacity: 0.6"></div>
+              <div class="text-danger small mt-2" id="pfError"></div>
+            </div>
+            <div class="modal-footer border-0 d-flex flex-column gap-2">
+              <button type="submit" class="btn fit-btn-primary w-100">SIMPAN PROFIL</button>
+              <button type="button" class="btn fit-btn-ghost w-100" id="btnLogout">GANTI AKUN</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MODAL CONTOH GERAKAN (DEMO) ================== -->
+    <div class="modal fade" id="modalDemo" tabindex="-1" aria-hidden="true" aria-labelledby="modalDemoLabel">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+          <div class="modal-header border-0 pb-0">
+            <div class="overflow-hidden">
+              <p class="fit-mono mb-1">CONTOH GERAKAN</p>
+              <h5 class="modal-title fit-display text-truncate" id="modalDemoLabel">—</h5>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+          </div>
+          <div class="modal-body pt-2" id="modalDemoBody"></div>
+          <div class="modal-footer border-0">
+            <button type="button" class="btn fit-btn-primary" id="modalDemoPick">+ PILIH GERAKAN INI</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/demo-assets.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

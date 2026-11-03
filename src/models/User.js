@@ -58,6 +58,23 @@ module.exports = (sequelize, DataTypes) => {
         },
       },
 
+      username: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        unique: true, // satu username = satu akun (UNIQUE KEY di schema.sql)
+        set(value) {
+          if (value == null) return this.setDataValue("username", null);
+          this.setDataValue("username", String(value).trim().toLowerCase());
+        },
+        validate: {
+          notEmpty: { msg: "Field username tidak boleh kosong" },
+          len: {
+            args: [3, 50],
+            msg: "Field username harus antara 3 sampai 50 karakter",
+          },
+        },
+      },
+
       email: {
         type: DataTypes.STRING(100),
         allowNull: false,
@@ -89,6 +106,32 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false, // registrasi baru selalu mulai sebagai user Free
+      },
+
+      umur: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: true, // metrik demografi boleh belum diisi saat registrasi
+        validate: {
+          min: {
+            args: [10],
+            msg: "Field umur tidak masuk akal (minimal 10 tahun)",
+          },
+          max: {
+            args: [120],
+            msg: "Field umur tidak masuk akal (maksimal 120 tahun)",
+          },
+        },
+      },
+
+      gender: {
+        type: DataTypes.ENUM("male", "female"),
+        allowNull: true, // diisi lewat halaman profil
+        validate: {
+          isIn: {
+            args: [["male", "female"]],
+            msg: "Field gender harus salah satu dari: male, female",
+          },
+        },
       },
 
       berat_badan: {
@@ -147,9 +190,12 @@ module.exports = (sequelize, DataTypes) => {
           attributes: [
             "id",
             "nama",
+            "username",
             "email",
             "password",
             "is_premium",
+            "umur",
+            "gender",
             "berat_badan",
             "tinggi_badan",
             "createdAt",

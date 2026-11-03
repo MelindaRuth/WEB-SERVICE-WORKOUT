@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="Contoh animasi gerakan squat (placeholder)">
+  <!--
+    ASET SAMPEL / PLACEHOLDER.
+    Bukan contoh gerakan sungguhan — hanya bukti jalur render GIF/VIDEO di
+    halaman LOG sudah terpasang. Ganti dengan file asli, lalu hapus entri
+    "squat" pada public/js/demo-assets.js supaya memakai konvensi nama file
+    (public/assets/demo/squat.gif).
+  -->
+  <rect width="320" height="180" fill="#1b1b1b"/>
+  <line x1="20" y1="152" x2="300" y2="152" stroke="#2f2f2f" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- POSE 1: berdiri -->
+  <g stroke="#c9f732" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="120" cy="42" r="12" fill="#c9f732" stroke="none"/>
+    <path d="M120 56 L120 100"/>
+    <path d="M120 72 L100 94"/>
+    <path d="M120 72 L140 94"/>
+    <path d="M120 100 L106 150"/>
+    <path d="M120 100 L134 150"/>
+    <animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.4;0.5;0.9;1" dur="1.6s" repeatCount="indefinite"/>
+  </g>
+
+  <!-- POSE 2: jongkok -->
+  <g stroke="#c9f732" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0">
+    <circle cx="120" cy="70" r="12" fill="#c9f732" stroke="none"/>
+    <path d="M120 84 L120 112"/>
+    <path d="M120 96 L148 90"/>
+    <path d="M120 96 L146 100"/>
+    <path d="M120 112 L98 118 L98 150"/>
+    <path d="M120 112 L142 120 L142 150"/>
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.4;0.5;0.9;1" dur="1.6s" repeatCount="indefinite"/>
+  </g>
+
+  <text x="196" y="80" fill="#c9f732" font-family="monospace" font-size="15" letter-spacing="2">SQUAT</text>
+  <text x="196" y="100" fill="#7a7a7a" font-family="monospace" font-size="10" letter-spacing="1">SAMPLE / PLACEHOLDER</text>
+</svg>

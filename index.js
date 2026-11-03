@@ -9,6 +9,7 @@
 require("dotenv").config();
 
 const express = require("express");
+const path = require("path");
 const app = express();
 
 const logger = require("./src/middlewares/logger");
@@ -59,6 +60,24 @@ app.use("/api/v1/exercises", exerciseRouter);
 app.use("/api/v1/workout-logs", workoutLogRouter);
 app.use("/api/v1/recommendations", recommendationRouter);
 app.use("/api/v1/payments", paymentRouter);
+
+/* ------------------------------------------------------------------ */
+/* 2b. FRONTEND (halaman HTML/JS/CSS)                                  */
+/* ------------------------------------------------------------------ */
+// Mounted AFTER the API routes so `GET /` keeps answering with the service
+// info JSON (Postman contract). Everything under public/ is static only.
+const PUBLIC_DIR = path.join(__dirname, "public");
+app.use(express.static(PUBLIC_DIR));
+
+// Bootstrap dipakai dari node_modules (bukan CDN) supaya bisa jalan offline
+// dan tidak ada script pihak ketiga tanpa integrity check.
+app.use(
+  "/vendor/bootstrap",
+  express.static(path.join(__dirname, "node_modules", "bootstrap", "dist"))
+);
+
+// Alias ramah untuk membuka aplikasi dari browser.
+app.get("/app", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 
 /* ------------------------------------------------------------------ */
 /* 3. PENANGKAP PALING BAWAH (HARUS setelah semua router)             */

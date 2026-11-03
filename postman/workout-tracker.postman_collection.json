@@ -152,6 +152,153 @@
           ]
         },
         {
+          "name": "POST /users/login - VALID (akun seed Sari, password benar)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/login",
+            "body": {
+              "mode": "raw",
+              "raw": "\"{\\\"email\\\":\\\"sari@test.com\\\",\\\"password\\\":\\\"password123\\\"}\"",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"login mengembalikan profil user\", () => pm.expect(j.data.email).to.eql(\"sari@test.com\"));",
+                  "pm.test(\"password TIDAK pernah dibocorkan\", () => pm.expect(j.data).to.not.have.property(\"password\"));",
+                  "pm.test(\"akun seed memang premium\", () => pm.expect(j.data.is_premium).to.eql(true));",
+                  "pm.test(\"tersedia field profil lengkap\", () => pm.expect(j.data).to.have.property(\"username\"));",
+                  "pm.collectionVariables.set(\"loginEmail\", j.data.email);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /users/login - PASSWORD SALAH -> 401",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/login",
+            "body": {
+              "mode": "raw",
+              "raw": "\"{\\\"email\\\":\\\"sari@test.com\\\",\\\"password\\\":\\\"passwordsalah\\\"}\"",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401 Unauthorized\", () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"status fail\", () => pm.expect(j.status).to.eql(\"fail\"));",
+                  "pm.test(\"pesan umum, tidak menyebut field mana yang salah\", () => pm.expect(j.message).to.eql(\"Email atau password salah\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /users/login - EMAIL TIDAK TERDAFTAR -> 401 (pesan sama)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/login",
+            "body": {
+              "mode": "raw",
+              "raw": "\"{\\\"email\\\":\\\"tiada@test.com\\\",\\\"password\\\":\\\"apapun123\\\"}\"",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401, bukan 404: eksistensi email tidak dibocorkan\", () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"pesan identik dengan password salah\", () => pm.expect(j.message).to.eql(\"Email atau password salah\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /users/login - INVALID (email salah format, password kosong)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/login",
+            "body": {
+              "mode": "raw",
+              "raw": "\"{\\\"email\\\":\\\"bukan-email\\\",\\\"password\\\":\\\"\\\"}\"",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400 Validasi gagal\", () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"ada error per field berbahasa Indonesia\", () => pm.expect(j.errors).to.have.property(\"email\"));",
+                  "pm.test(\"password kosong ikut dilaporkan\", () => pm.expect(j.errors).to.have.property(\"password\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /users/login - method tidak diizinkan -> 405 (rute before /:id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 405 Method Not Allowed\", () => pm.response.to.have.status(405));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"mengarahkan ke method yang benar\", () => pm.expect(j.allowed).to.include(\"POST\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "POST /users - EMAIL DUPLIKAT -> 409",
           "request": {
             "method": "POST",
