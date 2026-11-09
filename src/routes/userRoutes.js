@@ -41,7 +41,7 @@ router
 //   GET /api/v1/users/:id/workout-logs
 router
   .route("/:id/workout-logs")
-  .get(listUserWorkoutLogs)
+  .get(validate(schemas.userWorkoutLogsQuerySchema, "query"), listUserWorkoutLogs)
   .all(methodNotAllowed("GET"));
 
 // "/:id" -> GET detail | PUT update | DELETE (soft)

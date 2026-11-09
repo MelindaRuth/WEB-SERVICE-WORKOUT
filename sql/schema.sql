@@ -56,6 +56,8 @@ CREATE TABLE `exercises` (
   `id`               INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   `nama_latihan`     VARCHAR(100)  NOT NULL,
   `kategori`         ENUM('upper body','lower body','core','cardio','full body') NOT NULL,
+  `equipment`        VARCHAR(40)   NOT NULL DEFAULT 'bodyweight',
+  `body_part`        VARCHAR(40)   NOT NULL DEFAULT 'full body',
   `kalori_per_menit` DECIMAL(6,2)  NOT NULL,
   `is_premium_only`  TINYINT(1)    NOT NULL DEFAULT 0,
   `created_at`       DATETIME      NOT NULL,

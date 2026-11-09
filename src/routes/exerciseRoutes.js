@@ -19,7 +19,7 @@ const {
 
 router
   .route("/")
-  .get(getAllExercises)
+  .get(validate(schemas.exerciseQuerySchema, "query"), getAllExercises)
   .post(validate(schemas.exerciseCreateSchema), createExercise)
   .all(methodNotAllowed("GET", "POST"));
 

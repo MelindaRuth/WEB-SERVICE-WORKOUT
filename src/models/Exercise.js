@@ -12,6 +12,7 @@
  * - Setter normalisasi `nama_latihan` + `unique` anti duplikat.
  */
 const { Model } = require("sequelize");
+const { EQUIPMENT, BODY_PARTS } = require("../config/exerciseTaxonomy");
 
 // Satu daftar dipakai dua kali: validasi model dan pesan error.
 // Kalau nanti kategori bertambah, cukup ubah di sini.
@@ -72,6 +73,30 @@ module.exports = (sequelize, DataTypes) => {
           isIn: {
             args: [KATEGORI],
             msg: `Field kategori harus salah satu dari: ${KATEGORI.join(", ")}`,
+          },
+        },
+      },
+
+      equipment: {
+        type: DataTypes.STRING(40),
+        allowNull: false,
+        defaultValue: "bodyweight",
+        validate: {
+          isIn: {
+            args: [EQUIPMENT],
+            msg: `Field equipment harus salah satu dari: ${EQUIPMENT.join(", ")}`,
+          },
+        },
+      },
+
+      body_part: {
+        type: DataTypes.STRING(40),
+        allowNull: false,
+        defaultValue: "full body",
+        validate: {
+          isIn: {
+            args: [BODY_PARTS],
+            msg: `Field body_part harus salah satu dari: ${BODY_PARTS.join(", ")}`,
           },
         },
       },

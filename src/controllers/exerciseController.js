@@ -13,20 +13,28 @@ const { Op, fn, col, where: rawWhere } = require("sequelize");
 const { Exercise, WorkoutDetail } = require("../models");
 
 // Whitelist kolom sort (lihat alasan di userController).
-const KOLOM_SORT_BOLEH = ["id", "nama_latihan", "kategori", "kalori_per_menit", "is_premium_only"];
+const KOLOM_SORT_BOLEH = ["id", "nama_latihan", "kategori", "equipment", "body_part", "kalori_per_menit", "is_premium_only"];
 
 /* ================================================================== */
 /* GET /api/v1/exercises                                               */
 /* Query: ?kategori= &keyword= &sort= &order= &limit= &offset=         */
 /* ================================================================== */
 const getAllExercises = async (req, res) => {
-  const { kategori, keyword, sort, order, limit, offset } = req.query;
+  const { kategori, keyword, equipment, body_part, sort, order, limit, offset } = req.validated;
 
   // Bangun WHERE pakai Op — semua penyaringan terjadi di SQL, bukan JS.
   const kondisi = [];
 
   if (kategori) {
     kondisi.push({ kategori });
+  }
+
+  if (equipment) {
+    kondisi.push({ equipment });
+  }
+
+  if (body_part) {
+    kondisi.push({ body_part });
   }
 
   if (keyword) {

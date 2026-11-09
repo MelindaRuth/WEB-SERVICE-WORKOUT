@@ -70,6 +70,8 @@ Project ini memiliki 4 tabel utama:
 | id               | INT (PK, AI)  | ID unik gerakan                                     |
 | nama_latihan     | VARCHAR(100)  | Nama gerakan (mis. "Sumo Squats")                  |
 | kategori         | VARCHAR(50)   | Grup otot / kategori (upper body, lower body, core) |
+| equipment        | VARCHAR(40)   | Alat utama yang dibutuhkan (mis. bodyweight, dumbbell, treadmill) |
+| body_part        | VARCHAR(40)   | Area utama yang dilatih (mis. chest, back, legs, core) |
 | kalori_per_menit | DECIMAL(6,2)  | Estimasi kalori terbakar per menit                  |
 | is_premium_only  | BOOLEAN       | true = hanya untuk user premium                     |
 | created_at       | DATETIME      | Waktu pembuatan                                     |
@@ -118,7 +120,7 @@ Base path: `{{baseUrl}}/api/v1`. Prefix `/api/v1` menandakan versi besar kontrak
 | 4  | PUT    | `/api/v1/users/:id`                     | Update profil & metrik tubuh user                                             | 200               | 400, 404, 405                                        |
 | 5  | DELETE | `/api/v1/users/:id`                     | Soft delete user (paranoid) — ditolak jika masih ada log aktif               | 200               | 404, 409 (user masih punya workout log), 405         |
 | 6  | GET    | `/api/v1/users/:id/workout-logs`        | **Nested resource:** daftar log latihan milik user tertentu                  | 200               | 404 (user tidak ditemukan), 405                      |
-| 7  | GET    | `/api/v1/exercises`                     | Daftar master exercise — **filter** `kategori`, `keyword`; `sort`+`order`; `limit`+`offset` | 200 | 400, 405                                    |
+| 7  | GET    | `/api/v1/exercises`                     | Daftar master exercise — **filter** `kategori`, `equipment`, `body_part`, `keyword`; `sort`+`order`; `limit`+`offset` | 200 | 400, 405 |
 | 8  | POST   | `/api/v1/exercises`                     | Admin menambah gerakan baru                                                   | 201 + `Location`  | 400 (Joi), 405, 409 (nama latihan sudah terdaftar)   |
 | 9  | PATCH  | `/api/v1/exercises/:id`                 | Admin mengubah sebagian data gerakan (mis. kalori per menit)                | 200               | 400, 404, 405                                        |
 | 10 | DELETE | `/api/v1/exercises/:id`                 | Hapus gerakan — ditolak jika masih dipakai workout detail                   | 200               | 404, 409 (masih dirujuk `workout_details`), 405      |

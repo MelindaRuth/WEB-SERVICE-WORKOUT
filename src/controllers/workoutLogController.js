@@ -153,7 +153,7 @@ const getWorkoutLogById = async (req, res) => {
 /* ================================================================== */
 const listUserWorkoutLogs = async (req, res) => {
   const { id } = req.params;
-  const { sort, order, limit, offset } = req.query;
+  const { sort, order, limit, offset, mulai, sampai, keyword, equipment, body_part } = req.validated;
 
   const user = await User.findByPk(id, { attributes: ["id", "username", "nama"] });
   if (!user) {
@@ -163,9 +163,36 @@ const listUserWorkoutLogs = async (req, res) => {
   }
 
   const KOLOM_SORT = ["id", "tanggal", "total_kalori", "createdAt"];
+  const kondisiLog = { user_id: user.id };
+  if (mulai || sampai) {
+    kondisiLog.tanggal = {};
+    if (mulai) kondisiLog.tanggal[Op.gte] = mulai;
+    if (sampai) kondisiLog.tanggal[Op.lte] = sampai;
+  }
+
+  const kondisiLatihan = [];
+  if (equipment) kondisiLatihan.push({ equipment });
+  if (body_part) kondisiLatihan.push({ body_part });
+  if (keyword) {
+    kondisiLatihan.push({ nama_latihan: { [Op.like]: `%${keyword}%` } });
+  }
+  const filterLatihan = kondisiLatihan.length
+    ? [{
+        model: Exercise,
+        as: "exercises",
+        attributes: [],
+        through: { attributes: [] },
+        where: { [Op.and]: kondisiLatihan },
+        required: true,
+      }]
+    : [];
+
   const { count: total, rows } = await WorkoutLog.findAndCountAll({
-    where: { user_id: user.id },
+    where: kondisiLog,
     attributes: ["id", "tanggal", "total_kalori", "catatan", "createdAt"],
+    include: filterLatihan,
+    distinct: true,
+    col: "id",
     order: [[KOLOM_SORT.includes(sort) ? sort : "tanggal", order === "asc" ? "ASC" : "DESC"]],
     limit: Math.min(Number(limit) || 20, 100),
     offset: Number(offset) || 0,

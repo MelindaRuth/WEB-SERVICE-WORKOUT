@@ -7,6 +7,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "migrate": "node scripts/migrate.js",
+    "migrate:filters": "node scripts/migrate.js filters",
     "seed": "node scripts/migrate.js seed",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

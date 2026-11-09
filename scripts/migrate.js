@@ -15,6 +15,7 @@
  *   npm run migrate          -> schema + seed (reset penuh)
  *   npm run migrate schema   -> hanya schema (tanpa seed)
  *   npm run migrate seed     -> hanya seed (tabel harus sudah ada)
+ *   npm run migrate filters  -> tambah kolom metadata filter tanpa reset data
  */
 require("dotenv").config();
 
@@ -54,6 +55,44 @@ const main = async () => {
     if (mode === "all" || mode === "seed") {
       console.log("[migrate] Menjalankan sql/seed.sql...");
       await koneksi.query(bacaSql("seed.sql"));
+    }
+
+    if (mode === "filters") {
+      const [columns] = await koneksi.query("SHOW COLUMNS FROM `exercises`");
+      const columnNames = new Set(columns.map((column) => column.Field));
+      if (!columnNames.has("equipment")) {
+        await koneksi.query(
+          "ALTER TABLE `exercises` ADD COLUMN `equipment` VARCHAR(40) NOT NULL DEFAULT 'bodyweight'"
+        );
+      }
+      if (!columnNames.has("body_part")) {
+        await koneksi.query(
+          "ALTER TABLE `exercises` ADD COLUMN `body_part` VARCHAR(40) NOT NULL DEFAULT 'full body'"
+        );
+      }
+
+      await koneksi.query(`
+        UPDATE exercises SET
+          equipment = CASE
+            WHEN LOWER(nama_latihan) LIKE '%dumbbell%' THEN 'dumbbell'
+            WHEN LOWER(nama_latihan) LIKE '%treadmill%' THEN 'treadmill'
+            WHEN LOWER(nama_latihan) LIKE '%ring%' THEN 'rings'
+            ELSE equipment
+          END,
+          body_part = CASE
+            WHEN LOWER(nama_latihan) LIKE '%muscle up%' THEN 'back'
+            WHEN LOWER(nama_latihan) LIKE '%curl%' THEN 'arms'
+            WHEN LOWER(nama_latihan) LIKE '%row%' THEN 'back'
+            WHEN LOWER(nama_latihan) LIKE '%push up%' THEN 'chest'
+            WHEN LOWER(nama_latihan) LIKE '%glute%' THEN 'glutes'
+            WHEN kategori = 'cardio' THEN 'cardio'
+            WHEN kategori = 'core' THEN 'core'
+            WHEN kategori = 'lower body' THEN 'legs'
+            WHEN kategori = 'upper body' THEN 'arms'
+            ELSE 'full body'
+          END
+      `);
+      console.log("[migrate] Metadata equipment/body_part ditambahkan tanpa reset data.");
     }
 
     console.log(`[migrate] Selesai (mode=${mode}). Database siap dipakai.`);

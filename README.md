@@ -79,6 +79,11 @@ mengelola skema murni lewat `sql/schema.sql`.
 | `npm run migrate`    | `CREATE DATABASE` + `schema.sql` + `seed.sql` (reset penuh)|
 | `npm run migrate schema` | Hanya rebuild tabel (tanpa seed)                       |
 | `npm run seed`       | Hanya isi ulang data awal (tabel harus sudah ada)          |
+| `npm run migrate:filters` | Tambah metadata equipment/body part ke DB lama tanpa reset |
+
+> `npm run migrate` membangun ulang tabel dan menghapus data lama. Untuk database
+> proyek yang sudah berisi data, jalankan `npm run migrate:filters` agar hanya
+> menambahkan kolom filter yang belum ada.
 
 ---
 
@@ -135,7 +140,7 @@ Prefix dasar: **`/api/v1`**. Format response konsisten:
 
 | Method   | Path                     | Deskripsi                                            | Sukses | Error                     |
 |----------|--------------------------|------------------------------------------------------|--------|---------------------------|
-| `GET`    | `/api/v1/exercises`      | Daftar + filter `?kategori=&keyword=&sort=&order=&limit=&offset=` | 200 | —            |
+| `GET`    | `/api/v1/exercises`      | Daftar + filter `?kategori=&equipment=&body_part=&keyword=&sort=&order=&limit=&offset=` | 200 | — |
 | `POST`   | `/api/v1/exercises`      | Tambah gerakan (master data Admin)                    | 201    | 400, 409 (nama kembar)     |
 | `PATCH`  | `/api/v1/exercises/:id`  | Update sebagian (tanpa default yang menyelinap)        | 200    | 400, 404                  |
 | `DELETE` | `/api/v1/exercises/:id`  | Hapus gerakan                                         | 200    | 404, 409 (masih dirujuk)   |
@@ -266,9 +271,9 @@ UI berada di `/app`.
 |----------------------|----------------------------------------------------------------------------------|
 | **Auth** (sebelum masuk) | `POST /users/login` (tab MASUK), `POST /users` (tab DAFTAR), lalu `GET /users/:id` |
 | **Home** `#/home`    | `GET /users/:id` (log ikut terbawa) — streak, statistik, weekly activity, body metrics, recent sessions + **toggle dark/light** |
-| **Log** `#/log`      | `GET /exercises`, `POST /exercises` (mode CUSTOM), `POST /workout-logs`            |
+| **Log** `#/log`      | `GET /exercises` (filter equipment & bagian tubuh), `POST /exercises` (mode CUSTOM), `POST /workout-logs` |
 | **AI Coach** `#/coach` | `POST /recommendations/generate` (Free = template DB, Premium = Gemini + fallback 502/504) |
-| **Progress** `#/progress` | `GET /workout-logs/statistik`, `GET /users/:id/workout-logs`, `GET /workout-logs/:id` |
+| **Progress** `#/progress` | Statistik dan riwayat sesi dengan filter tanggal, gerakan, equipment & bagian tubuh serta pagination |
 | **Profil** (tombol kanan atas) | `PUT /users/:id` — username, gender (male/female), umur, berat & tinggi badan |
 
 Catatan implementasi frontend:

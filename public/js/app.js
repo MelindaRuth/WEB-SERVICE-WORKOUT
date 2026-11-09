@@ -26,6 +26,8 @@ const state = {
   logs: [], // ringkasan: { id, tanggal, total_kalori, catatan }
   details: {}, // logId -> log lengkap (dengan exercises + kolom pivot)
   exercises: [],
+  exerciseFilters: { equipment: "", body_part: "" },
+  history: { from: "", to: "", keyword: "", equipment: "", body_part: "", offset: 0 },
   draft: { selectedIds: [], previewId: null, custom: false, namaCustom: "", set: 3, rep: 12, unit: "reps", weight: "" },
   coach: { durasi: 20, peralatan: ["Dumbbell"], note: "", result: null, error: null },
 };
@@ -585,6 +587,32 @@ async function renderHome(app) {
 
 const KATEGORI_CUSTOM = "full body";
 const KALORI_CUSTOM = 7;
+const EQUIPMENT_FILTER_OPTIONS = [
+  ["bodyweight", "Tanpa alat"],
+  ["dumbbell", "Dumbbell"],
+  ["barbell", "Barbell"],
+  ["treadmill", "Treadmill"],
+  ["resistance_band", "Resistance band"],
+  ["kettlebell", "Kettlebell"],
+  ["rings", "Rings"],
+  ["other", "Lainnya"],
+];
+const BODY_PART_FILTER_OPTIONS = [
+  ["chest", "Dada"],
+  ["back", "Punggung"],
+  ["shoulders", "Bahu"],
+  ["arms", "Lengan"],
+  ["core", "Core"],
+  ["glutes", "Glutes"],
+  ["legs", "Kaki"],
+  ["cardio", "Kardio"],
+  ["full body", "Seluruh tubuh"],
+];
+
+const labelEquipment = (value) =>
+  EQUIPMENT_FILTER_OPTIONS.find(([key]) => key === value)?.[1] || value || "Tanpa alat";
+const labelBodyPart = (value) =>
+  BODY_PART_FILTER_OPTIONS.find(([key]) => key === value)?.[1] || value || "Seluruh tubuh";
 
 /* --------------------------------------------------------------------------
  * RAK CONTOH GERAKAN (GIF / VIDEO)
@@ -717,7 +745,7 @@ function bindDemoModal() {
 
 async function renderLog(app) {
   const d = state.draft;
-  const res = await api.listExercises({ limit: 100 });
+  const res = await api.listExercises({ limit: 100, ...state.exerciseFilters });
   state.exercises = res.data;
 
   const today = todayISO();
@@ -746,6 +774,27 @@ async function renderLog(app) {
 
       <p class="fit-mono mb-2" style="font-size:.62rem">Pilih satu atau lebih gerakan untuk satu sesi</p>
 
+      <div class="row g-2 mb-3" aria-label="Filter gerakan">
+        <div class="col-6">
+          <label class="fit-mono form-label" for="filterEquipment">EQUIPMENT</label>
+          <select class="form-select fit-input" id="filterEquipment">
+            <option value="">Semua equipment</option>
+            ${EQUIPMENT_FILTER_OPTIONS.map(
+              ([value, label]) => `<option value="${value}" ${state.exerciseFilters.equipment === value ? "selected" : ""}>${esc(label)}</option>`
+            ).join("")}
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="fit-mono form-label" for="filterBodyPart">BAGIAN TUBUH</label>
+          <select class="form-select fit-input" id="filterBodyPart">
+            <option value="">Semua bagian</option>
+            ${BODY_PART_FILTER_OPTIONS.map(
+              ([value, label]) => `<option value="${esc(value)}" ${state.exerciseFilters.body_part === value ? "selected" : ""}>${esc(label)}</option>`
+            ).join("")}
+          </select>
+        </div>
+      </div>
+
       <div id="exercisePicker" class="fit-ex-grid mb-3" ${d.custom ? "hidden" : ""}>
         ${state.exercises
           .map((e) => {
@@ -757,7 +806,7 @@ async function renderLog(app) {
                          data-id="${e.id}" role="button" tabindex="${terkunci ? -1 : 0}"
                          aria-pressed="${terpilih}" ${terkunci ? "aria-disabled='true' title='Khusus premium'" : ""}>
                       <span class="ex-emoji">${terkunci ? "🔒" : exEmoji(e.nama_latihan)}</span>
-                      <span>${esc(e.nama_latihan)}</span>
+                      <span>${esc(e.nama_latihan)}<small class="fit-mono d-block">${esc(labelEquipment(e.equipment))} · ${esc(labelBodyPart(e.body_part))}</small></span>
                       ${
                         terkunci
                           ? ""
@@ -837,6 +886,15 @@ async function renderLog(app) {
   /* ------------------------------ wiring ------------------------------ */
   $("#btnCustom").addEventListener("click", () => {
     state.draft.custom = !state.draft.custom;
+    renderLog(app);
+  });
+
+  $("#filterEquipment").addEventListener("change", (e) => {
+    state.exerciseFilters.equipment = e.target.value;
+    renderLog(app);
+  });
+  $("#filterBodyPart").addEventListener("change", (e) => {
+    state.exerciseFilters.body_part = e.target.value;
     renderLog(app);
   });
 
@@ -1160,9 +1218,20 @@ function bindLogGerakan(root) {
 /* ==================================================================== */
 
 async function renderProgress(app) {
+  const history = state.history;
   const [stat, logList] = await Promise.all([
-    api.getStatistik(state.user.id),
-    api.listUserLogs(state.user.id, { limit: 20, sort: "tanggal", order: "desc" }),
+    api.getStatistik(state.user.id, { mulai: history.from, sampai: history.to }),
+    api.listUserLogs(state.user.id, {
+      limit: 20,
+      offset: history.offset,
+      sort: "tanggal",
+      order: "desc",
+      mulai: history.from,
+      sampai: history.to,
+      keyword: history.keyword,
+      equipment: history.equipment,
+      body_part: history.body_part,
+    }),
   ]);
 
   const groups = groupByDate(logList.data);
@@ -1239,6 +1308,44 @@ async function renderProgress(app) {
     </div>
 
     <h2 class="fit-section-title">Session History</h2>
+    <form class="fit-card mb-3" id="historyFilters">
+      <div class="row g-2">
+        <div class="col-6">
+          <label class="fit-mono form-label" for="historyFrom">DARI TANGGAL</label>
+          <input class="form-control fit-input" id="historyFrom" type="date" value="${esc(history.from)}" />
+        </div>
+        <div class="col-6">
+          <label class="fit-mono form-label" for="historyTo">SAMPAI TANGGAL</label>
+          <input class="form-control fit-input" id="historyTo" type="date" value="${esc(history.to)}" />
+        </div>
+        <div class="col-12">
+          <label class="fit-mono form-label" for="historyKeyword">NAMA GERAKAN</label>
+          <input class="form-control fit-input" id="historyKeyword" maxlength="100" placeholder="Cari gerakan…" value="${esc(history.keyword)}" />
+        </div>
+        <div class="col-6">
+          <label class="fit-mono form-label" for="historyEquipment">EQUIPMENT</label>
+          <select class="form-select fit-input" id="historyEquipment">
+            <option value="">Semua equipment</option>
+            ${EQUIPMENT_FILTER_OPTIONS.map(
+              ([value, label]) => `<option value="${value}" ${history.equipment === value ? "selected" : ""}>${esc(label)}</option>`
+            ).join("")}
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="fit-mono form-label" for="historyBodyPart">BAGIAN TUBUH</label>
+          <select class="form-select fit-input" id="historyBodyPart">
+            <option value="">Semua bagian</option>
+            ${BODY_PART_FILTER_OPTIONS.map(
+              ([value, label]) => `<option value="${esc(value)}" ${history.body_part === value ? "selected" : ""}>${esc(label)}</option>`
+            ).join("")}
+          </select>
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn fit-btn-primary" type="submit">FILTER RIWAYAT</button>
+        <button class="btn fit-chip" type="button" id="clearHistoryFilters">RESET</button>
+      </div>
+    </form>
     ${
       groups.length
         ? groups
@@ -1267,10 +1374,39 @@ async function renderProgress(app) {
               </div>`
             )
             .join("")
-        : `<div class="fit-card text-center py-4"><p class="fit-mono mb-0">Belum ada sesi tersimpan.</p></div>`
+        : `<div class="fit-card text-center py-4"><p class="fit-mono mb-0">${logList.total ? "Tidak ada sesi yang cocok dengan filter." : "Belum ada sesi tersimpan."}</p></div>`
     }
 
+    ${logList.total > 20 ? `<div class="d-flex align-items-center justify-content-between mt-2">
+      <button class="btn fit-chip" id="historyPrevious" ${history.offset === 0 ? "disabled" : ""}>← SEBELUMNYA</button>
+      <span class="fit-mono">${history.offset + 1}–${Math.min(history.offset + logList.data.length, logList.total)} / ${logList.total}</span>
+      <button class="btn fit-chip" id="historyNext" ${history.offset + 20 >= logList.total ? "disabled" : ""}>SELANJUTNYA →</button>
+    </div>` : `<p class="fit-mono mt-2">${logList.total} sesi</p>`}
+
     <a href="#/log" class="btn fit-btn-primary mt-2">+ TAMBAH SESI BARU</a>`;
+
+  $("#historyFilters").addEventListener("submit", (e) => {
+    e.preventDefault();
+    history.from = $("#historyFrom").value;
+    history.to = $("#historyTo").value;
+    history.keyword = $("#historyKeyword").value.trim();
+    history.equipment = $("#historyEquipment").value;
+    history.body_part = $("#historyBodyPart").value;
+    history.offset = 0;
+    renderRoute();
+  });
+  $("#clearHistoryFilters").addEventListener("click", () => {
+    Object.assign(history, { from: "", to: "", keyword: "", equipment: "", body_part: "", offset: 0 });
+    renderRoute();
+  });
+  $("#historyPrevious")?.addEventListener("click", () => {
+    history.offset = Math.max(0, history.offset - 20);
+    renderRoute();
+  });
+  $("#historyNext")?.addEventListener("click", () => {
+    history.offset += 20;
+    renderRoute();
+  });
 }
 
 /* ==================================================================== */

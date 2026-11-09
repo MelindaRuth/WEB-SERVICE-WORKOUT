@@ -17,6 +17,7 @@
  * Semua pesan sengaja berbahasa Indonesia dan menyebut NAMA field-nya.
  */
 const Joi = require("joi");
+const { EQUIPMENT, BODY_PARTS } = require("../config/exerciseTaxonomy");
 
 /* ================================================================== */
 /* SKEMA USER                                                          */
@@ -258,6 +259,14 @@ const aturPremiumOnly = Joi.boolean().messages({
 const exerciseCreateSchema = Joi.object({
   nama_latihan: aturNamaLatihan.required(),
   kategori: aturKategori.required(),
+  equipment: Joi.string().valid(...EQUIPMENT).optional().default("bodyweight").messages({
+    "any.only": `Field equipment harus salah satu dari: ${EQUIPMENT.join(", ")}`,
+    "string.base": "Field equipment harus berupa teks",
+  }),
+  body_part: Joi.string().valid(...BODY_PARTS).optional().default("full body").messages({
+    "any.only": `Field body_part harus salah satu dari: ${BODY_PARTS.join(", ")}`,
+    "string.base": "Field body_part harus berupa teks",
+  }),
   kalori_per_menit: aturKalori.required(),
   is_premium_only: aturPremiumOnly.optional().default(false),
 });
@@ -269,9 +278,60 @@ const exerciseCreateSchema = Joi.object({
 const exerciseUpdateSchema = Joi.object({
   nama_latihan: aturNamaLatihan.optional(),
   kategori: aturKategori.optional(),
+  equipment: Joi.string().valid(...EQUIPMENT).optional().messages({
+    "any.only": `Field equipment harus salah satu dari: ${EQUIPMENT.join(", ")}`,
+    "string.base": "Field equipment harus berupa teks",
+  }),
+  body_part: Joi.string().valid(...BODY_PARTS).optional().messages({
+    "any.only": `Field body_part harus salah satu dari: ${BODY_PARTS.join(", ")}`,
+    "string.base": "Field body_part harus berupa teks",
+  }),
   kalori_per_menit: aturKalori.optional(),
   is_premium_only: aturPremiumOnly.optional(),
 });
+
+const exerciseQuerySchema = Joi.object({
+  kategori: Joi.string().valid(...KATEGORI).optional().messages({
+    "any.only": `Field kategori harus salah satu dari: ${KATEGORI.join(", ")}`,
+  }),
+  equipment: Joi.string().valid(...EQUIPMENT).optional().messages({
+    "any.only": `Field equipment harus salah satu dari: ${EQUIPMENT.join(", ")}`,
+  }),
+  body_part: Joi.string().valid(...BODY_PARTS).optional().messages({
+    "any.only": `Field body_part harus salah satu dari: ${BODY_PARTS.join(", ")}`,
+  }),
+  keyword: Joi.string().trim().min(1).max(100).optional().messages({
+    "string.min": "Field keyword minimal 1 karakter",
+    "string.max": "Field keyword maksimal 100 karakter",
+  }),
+  sort: Joi.string().valid("id", "nama_latihan", "kategori", "equipment", "body_part", "kalori_per_menit", "is_premium_only").optional(),
+  order: Joi.string().lowercase().valid("asc", "desc").optional(),
+  limit: Joi.number().integer().min(1).max(100).optional(),
+  offset: Joi.number().integer().min(0).optional(),
+}).messages({ "object.unknown": "Parameter filter tidak dikenal" });
+
+const userWorkoutLogsQuerySchema = Joi.object({
+  sort: Joi.string().valid("id", "tanggal", "total_kalori", "createdAt").optional(),
+  order: Joi.string().lowercase().valid("asc", "desc").optional(),
+  limit: Joi.number().integer().min(1).max(100).optional(),
+  offset: Joi.number().integer().min(0).optional(),
+  mulai: Joi.string().isoDate().optional().messages({
+    "string.isoDate": "Field mulai harus berupa tanggal ISO (YYYY-MM-DD)",
+  }),
+  sampai: Joi.string().isoDate().optional().messages({
+    "string.isoDate": "Field sampai harus berupa tanggal ISO (YYYY-MM-DD)",
+  }),
+  keyword: Joi.string().trim().min(1).max(100).optional().messages({
+    "string.min": "Field keyword minimal 1 karakter",
+    "string.max": "Field keyword maksimal 100 karakter",
+  }),
+  equipment: Joi.string().valid(...EQUIPMENT).optional().messages({
+    "any.only": `Field equipment harus salah satu dari: ${EQUIPMENT.join(", ")}`,
+  }),
+  body_part: Joi.string().valid(...BODY_PARTS).optional().messages({
+    "any.only": `Field body_part harus salah satu dari: ${BODY_PARTS.join(", ")}`,
+  }),
+}).messages({ "object.unknown": "Parameter filter tidak dikenal" });
 
 /* ================================================================== */
 /* SKEMA WORKOUT LOG                                                   */
@@ -447,6 +507,8 @@ module.exports = {
     userUpdateSchema,
     exerciseCreateSchema,
     exerciseUpdateSchema,
+    exerciseQuerySchema,
+    userWorkoutLogsQuerySchema,
     workoutLogCreateSchema,
     recommendationSchema,
     paymentCreateSchema,
