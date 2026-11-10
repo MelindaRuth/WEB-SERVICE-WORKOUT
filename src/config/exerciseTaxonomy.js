@@ -6,6 +6,9 @@ const EQUIPMENT = [
   "resistance_band",
   "kettlebell",
   "rings",
+  "lat_pulldown",
+  "leg_curl_extension",
+  "matras",
   "other",
 ];
 

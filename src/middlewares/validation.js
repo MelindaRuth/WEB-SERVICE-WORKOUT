@@ -441,6 +441,12 @@ const recommendationSchema = Joi.object({
     "number.max": "Field durasi_menit maksimal 120 menit",
   }),
 
+  jumlah_hari: Joi.number().integer().valid(4, 5).optional().messages({
+    "number.base": "Field jumlah_hari harus berupa angka",
+    "number.integer": "Field jumlah_hari harus bilangan bulat",
+    "any.only": "Field jumlah_hari hanya boleh 4 atau 5 hari",
+  }),
+
   peralatan: Joi.string().trim().max(120).optional().messages({
     "string.max": "Field peralatan maksimal 120 karakter",
     "string.base": "Field peralatan harus berupa teks",

@@ -51,7 +51,11 @@ VALUES
   (10, 'Sumo Squat',    'lower body', 'bodyweight', 'legs',       8.50,  0, NOW(), NOW()),
   (11, 'Treadmill',     'cardio',     'treadmill',  'cardio',     9.00,  0, NOW(), NOW()),
   (12, 'Dumbbell Row',  'upper body', 'dumbbell',   'back',       7.50,  0, NOW(), NOW()),
-  (13, 'Lunges',        'lower body', 'bodyweight', 'legs',       7.00,  0, NOW(), NOW());
+  (13, 'Lunges',        'lower body', 'bodyweight', 'legs',       7.00,  0, NOW(), NOW()),
+  (14, 'Lat Pulldown',  'upper body', 'lat_pulldown', 'back',     7.00,  0, NOW(), NOW()),
+  (15, 'Leg Curl',      'lower body', 'leg_curl_extension', 'legs', 6.50, 0, NOW(), NOW()),
+  (16, 'Leg Extension', 'lower body', 'leg_curl_extension', 'legs', 6.50, 0, NOW(), NOW()),
+  (17, 'Matras Mobility', 'core',     'matras',       'full body', 4.00, 0, NOW(), NOW());
 
 -- ---- workout_logs (4 sesi milik user 1 / Premium) --------------------------
 --   Tanggal dibuat RELATIF terhadap hari berjalan (CURDATE()) supaya streak,
