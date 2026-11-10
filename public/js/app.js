@@ -126,6 +126,12 @@ const currentTheme = () => localStorage.getItem(LS.theme) || "dark"; // default:
 
 function bindShell() {
   $("#btnTheme").addEventListener("click", toggleTheme);
+  $("#btnSidebar").addEventListener("click", () => setSidebarOpen(true));
+  $("#btnSidebarClose").addEventListener("click", () => setSidebarOpen(false));
+  $("#sidebarOverlay").addEventListener("click", () => setSidebarOpen(false));
+  $$("#desktopSidebar .nav-item").forEach((link) =>
+    link.addEventListener("click", () => setSidebarOpen(false))
+  );
 
   // Satu listener untuk semua aset demo: kalau file belum ada (404), coba
   // ekstensi berikutnya dari daftar kandidat, lalu jatuh ke placeholder.
@@ -137,6 +143,16 @@ function bindShell() {
     },
     true // error resource TIDAK bubble, jadi wajib pakai capture
   );
+}
+
+function setSidebarOpen(open) {
+  const sidebar = $("#desktopSidebar");
+  const overlay = $("#sidebarOverlay");
+  const button = $("#btnSidebar");
+  sidebar.classList.toggle("is-open", open);
+  overlay.hidden = !open;
+  document.body.classList.toggle("sidebar-open", open);
+  button.setAttribute("aria-expanded", String(open));
 }
 
 function updateTopbar() {
@@ -159,6 +175,7 @@ const currentRoute = () => {
 async function renderRoute() {
   const route = currentRoute();
   $$("#bottomnav .nav-item").forEach((a) => a.classList.toggle("active", a.dataset.route === route));
+  $$("#desktopSidebar .nav-item").forEach((a) => a.classList.toggle("active", a.dataset.route === route));
   const app = $("#app");
   app.innerHTML = spinnerBlock();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -181,6 +198,7 @@ async function loadUser(id) {
   state.logs = res.data.workout_logs || [];
   state.details = {};
   $("#bottomnav").hidden = false;
+  $("#btnSidebar").hidden = false;
   updateTopbar();
 }
 
@@ -255,6 +273,8 @@ function alertAuth(pesan, jenis = "danger") {
 
 function renderAuth(message, tab = "login") {
   $("#bottomnav").hidden = true;
+  $("#btnSidebar").hidden = true;
+  setSidebarOpen(false);
   const app = $("#app");
   app.innerHTML = `
     <div class="fit-auth">

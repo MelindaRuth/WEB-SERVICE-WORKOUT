@@ -20,6 +20,17 @@
     <!-- ============================ TOPBAR ============================ -->
     <header class="fit-topbar">
       <div class="fit-brand">
+        <button
+          class="fit-menu-btn"
+          id="btnSidebar"
+          type="button"
+          hidden
+          aria-label="Buka navigasi"
+          aria-controls="desktopSidebar"
+          aria-expanded="false"
+        >
+          <span>☰</span>
+        </button>
         <span class="fit-brand-text">FITAI</span>
       </div>
       <div class="fit-topbar-right">
@@ -45,6 +56,20 @@
         </button>
       </div>
     </header>
+
+    <div class="fit-sidebar-overlay" id="sidebarOverlay" hidden></div>
+    <aside class="fit-sidebar" id="desktopSidebar" aria-label="Navigasi utama">
+      <div class="fit-sidebar-head">
+        <span class="fit-mono">NAVIGATION</span>
+        <button class="fit-sidebar-close" id="btnSidebarClose" type="button" aria-label="Tutup navigasi">×</button>
+      </div>
+      <nav class="fit-sidebar-nav">
+        <a href="#/home" class="nav-item" data-route="home"><span>⚡</span><strong>HOME</strong><small>Ringkasan aktivitas</small></a>
+        <a href="#/log" class="nav-item" data-route="log"><span>📋</span><strong>LOG</strong><small>Catat latihan</small></a>
+        <a href="#/coach" class="nav-item" data-route="coach"><span>✦</span><strong>AI COACH</strong><small>Program latihan</small></a>
+        <a href="#/progress" class="nav-item" data-route="progress"><span>📈</span><strong>PROGRESS</strong><small>Lihat perkembangan</small></a>
+      </nav>
+    </aside>
 
     <!-- ============================ MAIN ============================== -->
     <main class="fit-main" id="app">
