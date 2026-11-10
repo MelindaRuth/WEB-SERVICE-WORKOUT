@@ -29,7 +29,7 @@ const state = {
   exerciseFilters: { equipment: "", body_part: "" },
   history: { from: "", to: "", keyword: "", equipment: "", body_part: "", offset: 0 },
   draft: { selectedIds: [], previewId: null, custom: false, namaCustom: "", set: 3, rep: 12, unit: "reps", weight: "" },
-  coach: { durasi: 20, peralatan: ["Dumbbell"], note: "", result: null, error: null },
+  coach: { durasi: 20, jumlahHari: 4, peralatan: ["Dumbbell"], customEquipment: "", note: "", result: null, error: null },
 };
 
 const esc = (s) =>
@@ -126,6 +126,12 @@ const currentTheme = () => localStorage.getItem(LS.theme) || "dark"; // default:
 
 function bindShell() {
   $("#btnTheme").addEventListener("click", toggleTheme);
+  $("#btnSidebar").addEventListener("click", () => setSidebarOpen(true));
+  $("#btnSidebarClose").addEventListener("click", () => setSidebarOpen(false));
+  $("#sidebarOverlay").addEventListener("click", () => setSidebarOpen(false));
+  $$("#desktopSidebar .nav-item").forEach((link) =>
+    link.addEventListener("click", () => setSidebarOpen(false))
+  );
 
   // Satu listener untuk semua aset demo: kalau file belum ada (404), coba
   // ekstensi berikutnya dari daftar kandidat, lalu jatuh ke placeholder.
@@ -137,6 +143,16 @@ function bindShell() {
     },
     true // error resource TIDAK bubble, jadi wajib pakai capture
   );
+}
+
+function setSidebarOpen(open) {
+  const sidebar = $("#desktopSidebar");
+  const overlay = $("#sidebarOverlay");
+  const button = $("#btnSidebar");
+  sidebar.classList.toggle("is-open", open);
+  overlay.hidden = !open;
+  document.body.classList.toggle("sidebar-open", open);
+  button.setAttribute("aria-expanded", String(open));
 }
 
 function updateTopbar() {
@@ -159,6 +175,7 @@ const currentRoute = () => {
 async function renderRoute() {
   const route = currentRoute();
   $$("#bottomnav .nav-item").forEach((a) => a.classList.toggle("active", a.dataset.route === route));
+  $$("#desktopSidebar .nav-item").forEach((a) => a.classList.toggle("active", a.dataset.route === route));
   const app = $("#app");
   app.innerHTML = spinnerBlock();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -181,6 +198,7 @@ async function loadUser(id) {
   state.logs = res.data.workout_logs || [];
   state.details = {};
   $("#bottomnav").hidden = false;
+  $("#btnSidebar").hidden = false;
   updateTopbar();
 }
 
@@ -255,6 +273,8 @@ function alertAuth(pesan, jenis = "danger") {
 
 function renderAuth(message, tab = "login") {
   $("#bottomnav").hidden = true;
+  $("#btnSidebar").hidden = true;
+  setSidebarOpen(false);
   const app = $("#app");
   app.innerHTML = `
     <div class="fit-auth">
@@ -440,8 +460,15 @@ async function masukUser(id) {
     unit: "reps",
     weight: "",
   };
-  state.coach.result = null;
-  state.coach.error = null;
+  state.coach = {
+    durasi: 20,
+    jumlahHari: 4,
+    peralatan: ["Dumbbell"],
+    customEquipment: "",
+    note: "",
+    result: null,
+    error: null,
+  };
   await loadUser(id);
   location.hash = "#/home";
   await renderRoute();
@@ -1074,10 +1101,22 @@ async function renderCoach(app) {
         ${DURASI_OPSI.map((m) => `<button class="btn fit-chip" data-durasi="${m}">${m}m</button>`).join("")}
       </div>
 
+      <div class="fit-mono form-label">PROGRAM LENGTH</div>
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        ${[4, 5].map((hari) => `<button class="btn fit-chip" data-jumlah-hari="${hari}">${hari} DAYS</button>`).join("")}
+      </div>
+
       <div class="fit-mono form-label">EQUIPMENT AVAILABLE</div>
       <div class="d-flex flex-wrap gap-2 mb-3">
         ${PERALATAN_OPSI.map((p) => `<button class="btn fit-chip" data-peralatan="${p}">${esc(p)}</button>`).join("")}
       </div>
+      ${
+        state.user.is_premium
+          ? `<input class="form-control fit-input mb-3" id="coachCustomEquipment" maxlength="120"
+              value="${esc(c.customEquipment)}"
+              placeholder="PRO: mesin lat pulldown, leg curl/extension, matras (pisahkan dengan koma)" />`
+          : `<p class="fit-mono mb-3" style="opacity:.7">Pemetaan alat khusus tersedia untuk akun Premium.</p>`
+      }
 
       <div class="fit-mono form-label">TELL AI MORE (OPTIONAL)</div>
       <textarea class="form-control fit-input" id="coachNote" maxlength="500"
@@ -1089,6 +1128,7 @@ async function renderCoach(app) {
     <div id="coachResult" class="mt-4">${c.result ? templateHasilCoach(c.result) : ""}</div>`;
 
   $$("[data-durasi]").forEach((b) => b.classList.toggle("active", Number(b.dataset.durasi) === c.durasi));
+  $$("[data-jumlah-hari]").forEach((b) => b.classList.toggle("active", Number(b.dataset.jumlahHari) === c.jumlahHari));
   $$("[data-peralatan]").forEach((b) => b.classList.toggle("active", c.peralatan.includes(b.dataset.peralatan)));
 
   $$("[data-durasi]").forEach((b) =>
@@ -1104,6 +1144,15 @@ async function renderCoach(app) {
       b.classList.toggle("active");
     })
   );
+  $$("[data-jumlah-hari]").forEach((b) =>
+    b.addEventListener("click", () => {
+      c.jumlahHari = Number(b.dataset.jumlahHari);
+      $$("[data-jumlah-hari]").forEach((x) => x.classList.toggle("active", x === b));
+    })
+  );
+  if ($("#coachCustomEquipment")) {
+    $("#coachCustomEquipment").addEventListener("input", (e) => (c.customEquipment = e.target.value));
+  }
   $("#coachNote").addEventListener("input", (e) => (c.note = e.target.value));
   $("#btnGenerate").addEventListener("click", () => generatePlan(app));
 
@@ -1113,7 +1162,7 @@ async function renderCoach(app) {
 /** Bangun payload: `kondisi` wajib (min 5 karakter) walau user tidak menulis catatan. */
 function payloadCoach() {
   const c = state.coach;
-  const equipment = c.peralatan.join(", ");
+  const equipment = [...c.peralatan, c.customEquipment.trim()].filter(Boolean).join(", ");
   const kondisi =
     c.note.trim() ||
     `Workout singkat ${c.durasi} menit${equipment ? ` dengan peralatan ${equipment}` : ""} untuk semua level.`;
@@ -1121,6 +1170,7 @@ function payloadCoach() {
     user_id: state.user.id,
     kondisi,
     durasi_menit: c.durasi,
+    jumlah_hari: c.jumlahHari,
     peralatan: equipment.slice(0, 120) || undefined,
   };
 }
@@ -1174,6 +1224,19 @@ function templateHasilCoach(data) {
         : ""
     }
     ${data.pesan ? `<div class="fit-card mb-3"><p class="mb-0" style="font-size:.88rem">${esc(data.pesan)}</p></div>` : ""}
+    ${
+      data.rencana_harian?.length
+        ? `<h2 class="fit-section-title">Program ${data.jumlah_hari || data.rencana_harian.length} Hari</h2>
+           ${data.rencana_harian
+             .map(
+               (hari) => `<div class="fit-card mb-2">
+                 <div class="fit-display" style="font-size:.88rem">HARI ${hari.hari} · ${esc(hari.fokus)}</div>
+                 <div class="fit-mono mt-2">${hari.gerakan.map((g) => esc(g.gerakan)).join(" · ")}</div>
+               </div>`
+             )
+             .join("")}`
+        : ""
+    }
 
     <h2 class="fit-section-title">Gerakan yang Disarankan</h2>
     ${gerakan

@@ -81,6 +81,17 @@ body {
   gap: 10px;
 }
 
+.fit-menu-btn {
+  display: none;
+  border: 1px solid var(--fit-border);
+  background: var(--fit-card);
+  color: var(--fit-text);
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 1rem;
+}
+
 .fit-brand-text {
   font-family: "Bungee", sans-serif;
   font-size: 1.05rem;
@@ -351,6 +362,12 @@ body {
   background: var(--fit-lime);
 }
 
+/* ---------------------------- DESKTOP SIDEBAR ----------------------- */
+.fit-sidebar,
+.fit-sidebar-overlay {
+  display: none;
+}
+
 /* -------------------------------- FORM ------------------------------- */
 .fit-input {
   background: var(--fit-card-2);
@@ -366,6 +383,124 @@ body {
   color: var(--fit-text);
   border-color: var(--fit-lime);
   box-shadow: 0 0 0 0.18rem var(--fit-lime-soft);
+}
+
+@media (min-width: 900px) {
+  :root {
+    --fit-sidebar-w: 264px;
+  }
+
+  .fit-menu-btn {
+    display: grid;
+    place-items: center;
+  }
+
+  .fit-topbar {
+    padding-left: 24px;
+    padding-right: 28px;
+  }
+
+  .fit-main {
+    max-width: 1040px;
+    padding: 32px 40px 48px;
+  }
+
+  .fit-bottomnav {
+    display: none;
+  }
+
+  .fit-sidebar {
+    display: block;
+    position: fixed;
+    z-index: 1060;
+    inset: 0 auto 0 0;
+    width: var(--fit-sidebar-w);
+    padding: 88px 18px 24px;
+    background: var(--fit-bg-elev);
+    border-right: 1px solid var(--fit-border);
+    box-shadow: 14px 0 40px rgba(0, 0, 0, 0.22);
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+  }
+
+  .fit-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .fit-sidebar-overlay {
+    position: fixed;
+    z-index: 1050;
+    inset: 0;
+    display: block;
+    background: rgba(0, 0, 0, 0.52);
+    backdrop-filter: blur(2px);
+  }
+
+  .fit-sidebar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px 18px;
+    border-bottom: 1px solid var(--fit-border);
+  }
+
+  .fit-sidebar-close {
+    border: 0;
+    background: transparent;
+    color: var(--fit-text-dim);
+    font-size: 1.7rem;
+    line-height: 1;
+  }
+
+  .fit-sidebar-close:hover {
+    color: var(--fit-lime);
+  }
+
+  .fit-sidebar-nav {
+    display: grid;
+    gap: 8px;
+    padding-top: 18px;
+  }
+
+  .fit-sidebar-nav .nav-item {
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    column-gap: 10px;
+    align-items: center;
+    padding: 13px 12px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    color: var(--fit-text-dim);
+    text-decoration: none;
+  }
+
+  .fit-sidebar-nav .nav-item > span {
+    grid-row: span 2;
+    font-size: 1.15rem;
+    text-align: center;
+  }
+
+  .fit-sidebar-nav .nav-item strong {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+  }
+
+  .fit-sidebar-nav .nav-item small {
+    margin-top: 3px;
+    font-size: 0.75rem;
+  }
+
+  .fit-sidebar-nav .nav-item:hover,
+  .fit-sidebar-nav .nav-item.active {
+    color: var(--fit-lime);
+    background: var(--fit-lime-soft);
+    border-color: var(--fit-lime);
+  }
+
+  body.sidebar-open {
+    overflow: hidden;
+  }
 }
 
 .fit-input::placeholder {

@@ -159,7 +159,13 @@ Prefix dasar: **`/api/v1`**. Format response konsisten:
 
 | Method | Path                                | Deskripsi                                                        | Sukses | Error                          |
 |--------|-------------------------------------|-----------------------------------------------------------------|--------|--------------------------------|
-| `POST` | `/api/v1/recommendations/generate`  | Free → template DB (200). Premium → Gemini; upstream gagal → fallback | 200 | 400, 404 (user), **502/504** (upstream) |
+| `POST` | `/api/v1/recommendations/generate`  | Free → template DB standar. Premium → Gemini dengan pemetaan alat kustom, rencana 4/5 hari, dan katalog lokal yang hanya memakai alat terpilih; upstream gagal → fallback | 200 | 400 (alat/jumlah hari), 404 (user), **502/504** (upstream) |
+
+Untuk Premium, kirim `peralatan` sebagai daftar dipisahkan koma (contoh:
+`mesin lat pulldown, leg curl/extension, treadmill, matras`) dan
+`jumlah_hari` bernilai `4` atau `5`. Nama alat dinormalisasi ke katalog
+exercise; Free tetap menerima template standar dan tidak menggunakan pemetaan
+alat kustom.
 
 ### Payments (`/api/v1/payments`) — integrasi Midtrans (Snap)
 
