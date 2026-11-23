@@ -42,6 +42,16 @@ const DEMO_ASSETS = {
     src: `${DEMO_FOLDER}/_sample-squat.svg`,
     note: "Contoh sementara (animasi placeholder). Ganti dengan GIF/MP4 gerakan squat yang sebenarnya.",
   },
+  "muscle up ring": {
+    src: `${DEMO_FOLDER}/premium-muscle-up.svg`,
+    type: "image",
+    note: "Ilustrasi preview premium sementara, bukan panduan teknik gerakan.",
+  },
+  "dragon flag": {
+    src: `${DEMO_FOLDER}/premium-dragon-flag.svg`,
+    type: "image",
+    note: "Ilustrasi preview premium sementara, bukan panduan teknik gerakan.",
+  },
 
   // Contoh entri yang bisa langsung ditiru:
   // "dumbbell curl": { src: `${DEMO_FOLDER}/dumbbell-curl.gif` },
@@ -59,10 +69,14 @@ const demoSlug = (nama) =>
 
 const adalahVideo = (src) =>
   DEMO_VIDEO_EXT.includes(String(src).split("?")[0].split(".").pop().toLowerCase());
+const tipeMediaDemo = (src) => {
+  if (adalahVideo(src)) return "video";
+  return String(src).split("?")[0].toLowerCase().endsWith(".gif") ? "gif" : "image";
+};
 
 /**
  * Cari aset demo untuk satu gerakan.
- * @returns {{src:string, type:"gif"|"video", poster?:string, credit?:string, note?:string}|null}
+ * @returns {{src:string, type:"gif"|"video"|"image", poster?:string, credit?:string, note?:string}|null}
  */
 function resolveDemoAsset(namaLatihan) {
   const nama = String(namaLatihan || "").trim().toLowerCase();
@@ -71,7 +85,7 @@ function resolveDemoAsset(namaLatihan) {
 
   const entri = DEMO_ASSETS[nama] || DEMO_ASSETS[slug] || null;
   if (entri && entri.src) {
-    return { ...entri, type: entri.type || (adalahVideo(entri.src) ? "video" : "gif") };
+    return { ...entri, type: entri.type || tipeMediaDemo(entri.src) };
   }
 
   // Jalur konvensi: tidak perlu menulis kode, cukup taruh file di folder demo.
@@ -79,7 +93,7 @@ function resolveDemoAsset(namaLatihan) {
   return {
     src: kandidat[0],
     kandidatSrc: kandidat, // dipakai UI untuk mencoba ekstensi lain saat onerror
-    type: adalahVideo(kandidat[0]) ? "video" : "gif",
+    type: tipeMediaDemo(kandidat[0]),
     dariKonvensi: true,
   };
 }
@@ -125,7 +139,7 @@ async function isiDemo(namaLatihan, { besar = false } = {}) {
     if (!tersedia) return templateDemoPlaceholder(namaLatihan);
     src = tersedia;
   }
-  return templateDemoMedia({ ...aset, src, type: adalahVideo(src) ? "video" : "gif" }, namaLatihan, {
+  return templateDemoMedia({ ...aset, src, type: tipeMediaDemo(src) }, namaLatihan, {
     besar,
   });
 }
@@ -151,7 +165,7 @@ function templateDemoMedia(aset, namaLatihan, { besar = false } = {}) {
          data-demo-nama="${esc(namaLatihan)}"
          data-kandidat="${esc((aset.kandidatSrc || []).join(","))}">
       ${media}
-      <span class="fit-demo-type">${aset.type === "video" ? "▶ VIDEO" : "◉ GIF"}</span>
+      <span class="fit-demo-type">${aset.type === "video" ? "▶ VIDEO" : aset.type === "gif" ? "◉ GIF" : "▧ IMAGE"}</span>
       ${
         aset.note || aset.credit
           ? `<div class="fit-demo-note">${esc(aset.note || aset.credit)}</div>`

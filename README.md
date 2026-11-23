@@ -277,7 +277,7 @@ UI berada di `/app`.
 |----------------------|----------------------------------------------------------------------------------|
 | **Auth** (sebelum masuk) | `POST /users/login` (tab MASUK), `POST /users` (tab DAFTAR), lalu `GET /users/:id` |
 | **Home** `#/home`    | `GET /users/:id` (log ikut terbawa) — streak, statistik, weekly activity, body metrics, recent sessions + **toggle dark/light** |
-| **Log** `#/log`      | `GET /exercises` (filter equipment & bagian tubuh), `POST /exercises` (mode CUSTOM), `POST /workout-logs` |
+| **Log** `#/log`      | `GET /exercises` (pencarian kata kunci + filter equipment & bagian tubuh, 20 hasil per halaman), `POST /exercises` (mode CUSTOM), `POST /workout-logs` |
 | **AI Coach** `#/coach` | `POST /recommendations/generate` (Free = template DB, Premium = Gemini + fallback 502/504) |
 | **Progress** `#/progress` | Statistik dan riwayat sesi dengan filter tanggal, gerakan, equipment & bagian tubuh serta pagination |
 | **Profil** (tombol kanan atas) | `PUT /users/:id` — username, gender (male/female), umur, berat & tinggi badan |
@@ -292,6 +292,10 @@ Catatan implementasi frontend:
   karena service ini belum memakai JWT; `#btnLogout` menghapusnya.
 - Grid gerakan mendukung **multi-select**: satu klik “LOG” = satu sesi berisi semua gerakan
   yang dipilih (relasi N:M lewat `workout_details`).
+- Katalog gerakan dimulai dengan 20 hasil dan mendukung pencarian nama serta tombol
+  “LIHAT LEBIH BANYAK”; daftar tidak menampilkan seluruh katalog sekaligus.
+- Timer sesi di halaman LOG menyediakan fase **EXERCISE** dan **BREAK**, durasi yang bisa
+  diatur (1–3600 detik), serta kontrol mulai/jeda dan reset.
 - Kolom beban (`WEIGHT (KG)`) tidak ada di skema service, maka dikirim sebagai `catatan`
   sesi, mis. `"@ 8kg"`.
 - Semua teks yang disisipkan ke DOM melewati `esc()` (anti XSS), dan error backend
@@ -325,7 +329,8 @@ const DEMO_ASSETS = {
 Catatan implementasi:
 
 - Tipe media ditebak dari ekstensi: `mp4/webm/mov` dirender sebagai
-  `<video controls autoplay muted loop playsinline>`, lainnya sebagai `<img>` (GIF).
+  `<video controls autoplay muted loop playsinline>`, GIF dan gambar lain dirender
+  sebagai `<img>`.
 - Pratinjau mengikuti kartu yang dipilih / yang sedang mendapat fokus keyboard, dan
   juga nama yang sedang diketik saat mode CUSTOM aktif.
 - Token async terpisah untuk rak dan modal, sehingga hasil probe lama tidak menimpa
@@ -333,6 +338,8 @@ Catatan implementasi:
 - `public/assets/demo/_sample-squat.svg` hanyalah animasi contoh (placeholder) untuk
   membuktikan jalur render bekerja — hapus entri `squat` di `DEMO_ASSETS` begitu GIF
   gerakan yang sebenarnya dimasukkan.
+- `premium-muscle-up.svg` dan `premium-dragon-flag.svg` adalah ilustrasi preview
+  sementara untuk dua gerakan premium seeded; keduanya bukan panduan teknik gerakan.
 
 ---
 

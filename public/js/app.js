@@ -26,9 +26,21 @@ const state = {
   logs: [], // ringkasan: { id, tanggal, total_kalori, catatan }
   details: {}, // logId -> log lengkap (dengan exercises + kolom pivot)
   exercises: [],
-  exerciseFilters: { equipment: "", body_part: "" },
+  exerciseFilters: { equipment: "", body_part: "", keyword: "" },
+  exerciseQueryKey: null,
+  exerciseTotal: 0,
+  exerciseRequest: 0,
+  exerciseLoadingMore: false,
   history: { from: "", to: "", keyword: "", equipment: "", body_part: "", offset: 0 },
   draft: { selectedIds: [], previewId: null, custom: false, namaCustom: "", set: 3, rep: 12, unit: "reps", weight: "" },
+  workoutTimer: {
+    phase: "exercise",
+    exerciseSeconds: 45,
+    breakSeconds: 60,
+    remaining: 45,
+    running: false,
+    endsAt: null,
+  },
   coach: { durasi: 20, jumlahHari: 4, peralatan: ["Dumbbell"], customEquipment: "", note: "", result: null, error: null },
 };
 
@@ -770,10 +782,97 @@ function bindDemoModal() {
   });
 }
 
+let workoutTimerInterval = null;
+
+const durasiTimer = (seconds) => `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
+
+function renderWorkoutTimer() {
+  const timer = state.workoutTimer;
+  const display = $("#sessionTimerDisplay");
+  if (!display) return;
+  display.textContent = durasiTimer(timer.remaining);
+  $("#sessionTimerPhase").textContent = timer.phase === "exercise" ? "EXERCISE" : "BREAK";
+  $("#sessionTimerStatus").textContent = timer.running ? "SEDANG BERJALAN" : "SIAP";
+  $("#btnTimerStart").textContent = timer.running ? "JEDA" : "MULAI";
+  $("#btnTimerExercise").classList.toggle("active", timer.phase === "exercise");
+  $("#btnTimerBreak").classList.toggle("active", timer.phase === "break");
+  $("#timerExerciseDuration").disabled = timer.running;
+  $("#timerBreakDuration").disabled = timer.running;
+}
+
+function hentikanTimerWorkout() {
+  if (workoutTimerInterval) clearInterval(workoutTimerInterval);
+  workoutTimerInterval = null;
+}
+
+function perbaruiTimerWorkout() {
+  const timer = state.workoutTimer;
+  if (!timer.running || !timer.endsAt) return;
+  timer.remaining = Math.max(0, Math.ceil((timer.endsAt - Date.now()) / 1000));
+  if (timer.remaining === 0) {
+    timer.running = false;
+    timer.endsAt = null;
+    hentikanTimerWorkout();
+    toast(timer.phase === "exercise" ? "Waktu exercise selesai 💪" : "Waktu break selesai 🔥", "info");
+  }
+  renderWorkoutTimer();
+}
+
+function aturFaseTimer(phase) {
+  const timer = state.workoutTimer;
+  timer.running = false;
+  timer.endsAt = null;
+  timer.phase = phase;
+  timer.remaining = phase === "exercise" ? timer.exerciseSeconds : timer.breakSeconds;
+  hentikanTimerWorkout();
+  renderWorkoutTimer();
+}
+
+function mulaiAtauJedaTimer() {
+  const timer = state.workoutTimer;
+  if (timer.running) {
+    perbaruiTimerWorkout();
+    timer.running = false;
+    timer.endsAt = null;
+    hentikanTimerWorkout();
+    renderWorkoutTimer();
+    return;
+  }
+
+  if (timer.remaining <= 0) {
+    timer.remaining = timer.phase === "exercise" ? timer.exerciseSeconds : timer.breakSeconds;
+  }
+  timer.running = true;
+  timer.endsAt = Date.now() + timer.remaining * 1000;
+  hentikanTimerWorkout();
+  workoutTimerInterval = setInterval(perbaruiTimerWorkout, 250);
+  renderWorkoutTimer();
+}
+
+function resetTimerWorkout() {
+  const timer = state.workoutTimer;
+  timer.running = false;
+  timer.endsAt = null;
+  timer.remaining = timer.phase === "exercise" ? timer.exerciseSeconds : timer.breakSeconds;
+  hentikanTimerWorkout();
+  renderWorkoutTimer();
+}
+
+const kunciQueryLatihan = () =>
+  JSON.stringify([state.exerciseFilters.keyword, state.exerciseFilters.equipment, state.exerciseFilters.body_part]);
+
 async function renderLog(app) {
   const d = state.draft;
-  const res = await api.listExercises({ limit: 100, ...state.exerciseFilters });
-  state.exercises = res.data;
+  const timer = state.workoutTimer;
+  const queryKey = kunciQueryLatihan();
+  if (queryKey !== state.exerciseQueryKey) {
+    const requestId = ++state.exerciseRequest;
+    const res = await api.listExercises({ limit: 20, offset: 0, ...state.exerciseFilters });
+    if (requestId !== state.exerciseRequest) return;
+    state.exercises = res.data;
+    state.exerciseTotal = res.total;
+    state.exerciseQueryKey = queryKey;
+  }
 
   const today = todayISO();
   const groupsToday = groupByDate(state.logs.filter((l) => String(l.tanggal).slice(0, 10) === today));
@@ -790,6 +889,34 @@ async function renderLog(app) {
       </div>
     </section>
 
+    <section class="fit-card fit-session-timer mb-3" aria-label="Timer sesi olahraga">
+      <div class="d-flex align-items-start justify-content-between gap-3">
+        <div>
+          <p class="fit-mono mb-1">TIMER SESI</p>
+          <div class="fit-display fit-timer-display" id="sessionTimerDisplay">${durasiTimer(timer.remaining)}</div>
+          <div class="fit-mono mt-1"><span id="sessionTimerPhase">${timer.phase === "exercise" ? "EXERCISE" : "BREAK"}</span> · <span id="sessionTimerStatus">${timer.running ? "SEDANG BERJALAN" : "SIAP"}</span></div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn fit-chip ${timer.phase === "exercise" ? "active" : ""}" id="btnTimerExercise">EXERCISE</button>
+          <button type="button" class="btn fit-chip ${timer.phase === "break" ? "active" : ""}" id="btnTimerBreak">BREAK</button>
+        </div>
+      </div>
+      <div class="row g-2 mt-2">
+        <div class="col-6">
+          <label class="fit-mono form-label" for="timerExerciseDuration">DURASI EXERCISE (DETIK)</label>
+          <input type="number" class="form-control fit-input" id="timerExerciseDuration" min="1" max="3600" value="${timer.exerciseSeconds}" ${timer.running ? "disabled" : ""} />
+        </div>
+        <div class="col-6">
+          <label class="fit-mono form-label" for="timerBreakDuration">DURASI BREAK (DETIK)</label>
+          <input type="number" class="form-control fit-input" id="timerBreakDuration" min="1" max="3600" value="${timer.breakSeconds}" ${timer.running ? "disabled" : ""} />
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-3">
+        <button type="button" class="btn fit-btn-primary flex-fill" id="btnTimerStart">${timer.running ? "JEDA" : "MULAI"}</button>
+        <button type="button" class="btn fit-btn-ghost" id="btnTimerReset">RESET</button>
+      </div>
+    </section>
+
     <div class="fit-card">
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h2 class="fit-display mb-0" style="font-size:1rem">ADD EXERCISE</h2>
@@ -800,6 +927,12 @@ async function renderLog(app) {
       </div>
 
       <p class="fit-mono mb-2" style="font-size:.62rem">Pilih satu atau lebih gerakan untuk satu sesi</p>
+
+      <div id="exerciseCatalog" ${d.custom ? "hidden" : ""}>
+      <label class="fit-mono form-label" for="exerciseSearch">CARI GERAKAN</label>
+      <input type="search" class="form-control fit-input mb-3" id="exerciseSearch"
+             placeholder="Ketik nama gerakan…" value="${esc(state.exerciseFilters.keyword)}"
+             autocomplete="off" />
 
       <div class="row g-2 mb-3" aria-label="Filter gerakan">
         <div class="col-6">
@@ -843,6 +976,15 @@ async function renderLog(app) {
                     </div>`;
           })
           .join("")}
+      </div>
+      <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+        <span class="fit-mono" id="exerciseResultCount">${state.exercises.length} dari ${state.exerciseTotal} gerakan</span>
+        ${
+          state.exercises.length < state.exerciseTotal
+            ? `<button type="button" class="btn fit-chip" id="btnLoadMoreExercises" ${state.exerciseLoadingMore ? "disabled" : ""}>${state.exerciseLoadingMore ? "MEMUAT…" : "LIHAT LEBIH BANYAK"}</button>`
+            : ""
+        }
+      </div>
       </div>
 
       <div id="customBox" ${d.custom ? "" : "hidden"} class="mb-3">
@@ -924,6 +1066,32 @@ async function renderLog(app) {
     state.exerciseFilters.body_part = e.target.value;
     renderLog(app);
   });
+  let pencarianTimer;
+  $("#exerciseSearch")?.addEventListener("input", (e) => {
+    state.exerciseFilters.keyword = e.target.value.trim();
+    clearTimeout(pencarianTimer);
+    pencarianTimer = setTimeout(() => renderLog(app), 250);
+  });
+  $("#btnLoadMoreExercises")?.addEventListener("click", async () => {
+    state.exerciseLoadingMore = true;
+    try {
+      const requestKey = kunciQueryLatihan();
+      const res = await api.listExercises({
+        limit: 20,
+        offset: state.exercises.length,
+        ...state.exerciseFilters,
+      });
+      if (requestKey === kunciQueryLatihan()) {
+        state.exercises = [...state.exercises, ...res.data];
+        state.exerciseTotal = res.total;
+      }
+    } catch (err) {
+      toast(err.message || "Gagal memuat gerakan", "danger");
+    } finally {
+      state.exerciseLoadingMore = false;
+      if ($("#exercisePicker")) await renderLog(app);
+    }
+  });
 
   // Kartu gerakan: klik ▶ = lihat contoh, klik badan kartu = pilih/deselect.
   $("#exercisePicker")?.addEventListener("click", (e) => {
@@ -999,6 +1167,30 @@ async function renderLog(app) {
   $("#inWeight").addEventListener("input", (e) => (state.draft.weight = e.target.value));
 
   $("#btnLog").addEventListener("click", () => simpanLog(app));
+  $("#btnTimerExercise").addEventListener("click", () => aturFaseTimer("exercise"));
+  $("#btnTimerBreak").addEventListener("click", () => aturFaseTimer("break"));
+  $("#btnTimerStart").addEventListener("click", mulaiAtauJedaTimer);
+  $("#btnTimerReset").addEventListener("click", resetTimerWorkout);
+  $("#timerExerciseDuration").addEventListener("change", (e) => {
+    const value = Number(e.target.value);
+    if (!Number.isInteger(value) || value < 1 || value > 3600) {
+      e.target.value = state.workoutTimer.exerciseSeconds;
+      toast("Durasi exercise harus 1–3600 detik", "danger");
+      return;
+    }
+    state.workoutTimer.exerciseSeconds = value;
+    if (state.workoutTimer.phase === "exercise") resetTimerWorkout();
+  });
+  $("#timerBreakDuration").addEventListener("change", (e) => {
+    const value = Number(e.target.value);
+    if (!Number.isInteger(value) || value < 1 || value > 3600) {
+      e.target.value = state.workoutTimer.breakSeconds;
+      toast("Durasi break harus 1–3600 detik", "danger");
+      return;
+    }
+    state.workoutTimer.breakSeconds = value;
+    if (state.workoutTimer.phase === "break") resetTimerWorkout();
+  });
   perbaruiJumlahPilih(); // pulihkan badge & label tombol setelah render ulang
   perbaruiDemoPanel(); // isi rak contoh gerakan (probe file GIF/MP4)
 }

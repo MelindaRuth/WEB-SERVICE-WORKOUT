@@ -185,6 +185,17 @@ body {
   border-color: var(--fit-lime);
 }
 
+.fit-session-timer {
+  border-color: var(--fit-lime);
+}
+
+.fit-timer-display {
+  color: var(--fit-lime);
+  font-size: clamp(2rem, 12vw, 3rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Streak card (lime penuh seperti mockup) */
 .fit-streak-card {
   background: var(--fit-lime);
