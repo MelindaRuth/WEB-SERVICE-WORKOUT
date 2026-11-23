@@ -133,6 +133,13 @@ const userLoginSchema = Joi.object({
   }),
 });
 
+const authRefreshSchema = Joi.object({
+  refresh_token: Joi.string().trim().required().messages({
+    "any.required": "Field refresh_token wajib diisi",
+    "string.empty": "Field refresh_token tidak boleh kosong",
+  }),
+});
+
 // PUT /api/v1/users/:id — update profil. Email & password TIDAK diubah
 // lewat endpoint ini (jalur riêng / tidak di sini).
 const userUpdateSchema = Joi.object({
@@ -207,6 +214,9 @@ const userUpdateSchema = Joi.object({
 
   is_premium: Joi.boolean().optional().messages({
     "boolean.base": "Field is_premium harus berupa true/false",
+  }),
+  role: Joi.string().valid("user", "admin").optional().messages({
+    "any.only": "Field role harus salah satu dari: user, admin",
   }),
 });
 
@@ -467,7 +477,58 @@ const paymentCreateSchema = Joi.object({
     "number.integer": "Field user_id harus bilangan bulat",
     "number.positive": "Field user_id harus lebih dari 0",
   }),
+  plan_id: Joi.number().integer().positive().optional(),
 });
+
+const equipmentCreateSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(100).required(),
+  slug: Joi.string().trim().min(2).max(60).optional(),
+  description: Joi.string().trim().max(500).optional().allow(null, ""),
+  icon: Joi.string().trim().max(20).optional().default("🏋️"),
+  aliases: Joi.array().items(Joi.string().trim().min(1).max(60)).optional().default([]),
+  category: Joi.string().trim().min(2).max(40).optional().default("other"),
+  is_active: Joi.boolean().optional().default(true),
+  sort_order: Joi.number().integer().min(0).optional().default(0),
+});
+
+const equipmentUpdateSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(100).optional(),
+  slug: Joi.string().trim().min(2).max(60).optional(),
+  description: Joi.string().trim().max(500).optional().allow(null, ""),
+  icon: Joi.string().trim().max(20).optional(),
+  aliases: Joi.array().items(Joi.string().trim().min(1).max(60)).optional(),
+  category: Joi.string().trim().min(2).max(40).optional(),
+  is_active: Joi.boolean().optional(),
+  sort_order: Joi.number().integer().min(0).optional(),
+});
+
+const pricingPlanCreateSchema = Joi.object({
+  code: Joi.string().trim().min(2).max(40).required(),
+  name: Joi.string().trim().min(2).max(100).required(),
+  description: Joi.string().trim().max(500).optional().allow(null, ""),
+  price: Joi.number().positive().max(100000000).required(),
+  currency: Joi.string().trim().length(3).uppercase().optional().default("IDR"),
+  duration_days: Joi.number().integer().min(1).max(3650).required(),
+  features: Joi.array().items(Joi.string().trim().min(1).max(200)).optional().default([]),
+  is_active: Joi.boolean().optional().default(true),
+  sort_order: Joi.number().integer().min(0).optional().default(0),
+});
+
+const pricingPlanUpdateSchema = pricingPlanCreateSchema.fork(
+  ["code", "name", "price", "duration_days"],
+  (schema) => schema.optional()
+);
+
+const adminUserUpdateSchema = Joi.object({
+  role: Joi.string().valid("user", "admin").optional(),
+  is_premium: Joi.boolean().optional(),
+  nama: Joi.string().trim().min(3).max(100).optional(),
+  username: Joi.string().trim().min(3).max(50).optional(),
+  umur: Joi.number().integer().min(10).max(120).optional().allow(null),
+  gender: Joi.string().valid("male", "female").optional().allow(null),
+  berat_badan: Joi.number().min(20).max(300).optional().allow(null),
+  tinggi_badan: Joi.number().min(50).max(250).optional().allow(null),
+}).min(1);
 
 /* ================================================================== */
 /* FACTORY MIDDLEWARE                                                  */
@@ -510,6 +571,7 @@ module.exports = {
   schemas: {
     userRegisterSchema,
     userLoginSchema,
+    authRefreshSchema,
     userUpdateSchema,
     exerciseCreateSchema,
     exerciseUpdateSchema,
@@ -518,5 +580,10 @@ module.exports = {
     workoutLogCreateSchema,
     recommendationSchema,
     paymentCreateSchema,
+    equipmentCreateSchema,
+    equipmentUpdateSchema,
+    pricingPlanCreateSchema,
+    pricingPlanUpdateSchema,
+    adminUserUpdateSchema,
   },
 };

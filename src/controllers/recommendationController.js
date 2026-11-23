@@ -19,7 +19,7 @@
  */
 const axios = require("axios");
 const { Op } = require("sequelize");
-const { User, Exercise } = require("../models");
+const { User, Exercise, Equipment } = require("../models");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
@@ -48,13 +48,28 @@ const EQUIPMENT_ALIASES = new Map([
   ["leg_curl_extension", "leg_curl_extension"],
 ]);
 
-const parseEquipment = (input) => {
+const parseEquipment = async (input) => {
+  const rows = await Equipment.findAll({ where: { is_active: true } });
+  const aliasMap = new Map();
+  for (const equipment of rows) {
+    const slug = equipment.slug;
+    const aliases = [
+      equipment.name,
+      equipment.slug,
+      ...((equipment.aliases && Array.isArray(equipment.aliases) ? equipment.aliases : [])),
+    ];
+    for (const alias of aliases) {
+      aliasMap.set(String(alias).trim().toLowerCase().replace(/\s+/g, " "), slug);
+    }
+  }
+  for (const [alias, slug] of EQUIPMENT_ALIASES.entries()) aliasMap.set(alias, slug);
+
   const values = String(input || "")
     .split(",")
     .map((value) => value.trim().toLowerCase().replace(/\s+/g, " "))
     .filter(Boolean);
-  const canonical = [...new Set(values.map((value) => EQUIPMENT_ALIASES.get(value)).filter(Boolean))];
-  return { canonical, unknown: values.filter((value) => !EQUIPMENT_ALIASES.has(value)) };
+  const canonical = [...new Set(values.map((value) => aliasMap.get(value)).filter(Boolean))];
+  return { canonical, unknown: values.filter((value) => !aliasMap.has(value)) };
 };
 
 /* ------------------------------------------------------------------ */
@@ -151,7 +166,7 @@ const generateRecommendation = async (req, res) => {
     });
   }
 
-  const equipmentInput = parseEquipment(peralatan);
+  const equipmentInput = await parseEquipment(peralatan);
   if (peralatan && equipmentInput.unknown.length) {
     return res.status(400).json({
       status: "fail",

@@ -41,7 +41,7 @@ const state = {
     running: false,
     endsAt: null,
   },
-  coach: { durasi: 20, jumlahHari: 4, peralatan: ["Dumbbell"], customEquipment: "", note: "", result: null, error: null },
+  coach: { durasi: 20, jumlahHari: 4, peralatan: [], customEquipment: "", note: "", result: null, error: null },
 };
 
 const esc = (s) =>
@@ -475,7 +475,7 @@ async function masukUser(id) {
   state.coach = {
     durasi: 20,
     jumlahHari: 4,
-    peralatan: ["Dumbbell"],
+    peralatan: [],
     customEquipment: "",
     note: "",
     result: null,
@@ -1728,6 +1728,8 @@ function bindProfile() {
 
   $("#btnLogout").addEventListener("click", () => {
     localStorage.removeItem(LS.user);
+    localStorage.removeItem("fitai_access_token");
+    localStorage.removeItem("fitai_refresh_token");
     state.user = null;
     state.logs = [];
     tutupModalProfil();

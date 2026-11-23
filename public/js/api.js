@@ -6,6 +6,7 @@
  * menampilkan `message` (pesan Bahasa Indonesia dari backend/Joi).
  */
 const API_BASE = "/api/v1";
+const AUTH_KEYS = { access: "fitai_access_token", refresh: "fitai_refresh_token" };
 
 class ApiError extends Error {
   constructor(message, status, errors, payload) {
@@ -28,9 +29,13 @@ async function request(path, { method = "GET", body, query } = {}) {
 
   let res;
   try {
+    const accessToken = localStorage.getItem(AUTH_KEYS.access);
     res = await fetch(url, {
       method,
-      headers: body ? { "Content-Type": "application/json" } : {},
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
@@ -59,7 +64,13 @@ const api = {
   listUsers: (query) => request("/users", { query }),
   getUser: (id) => request(`/users/${id}`),
   register: (body) => request("/users", { method: "POST", body }),
-  login: (body) => request("/users/login", { method: "POST", body }),
+  login: async (body) => {
+    const result = await request("/users/login", { method: "POST", body });
+    if (result.data?.access_token) localStorage.setItem(AUTH_KEYS.access, result.data.access_token);
+    if (result.data?.refresh_token) localStorage.setItem(AUTH_KEYS.refresh, result.data.refresh_token);
+    return result;
+  },
+  refresh: (refreshToken) => request("/users/refresh", { method: "POST", body: { refresh_token: refreshToken } }),
   updateUser: (id, body) => request(`/users/${id}`, { method: "PUT", body }),
   listUserLogs: (id, query) => request(`/users/${id}/workout-logs`, { query }),
 

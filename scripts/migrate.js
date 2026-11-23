@@ -16,6 +16,7 @@
  *   npm run migrate schema   -> hanya schema (tanpa seed)
  *   npm run migrate seed     -> hanya seed (tabel harus sudah ada)
  *   npm run migrate filters  -> tambah kolom metadata filter tanpa reset data
+ *   npm run migrate phase-a  -> tambah role, equipment, pricing, transaction, audit
  */
 require("dotenv").config();
 
@@ -93,6 +94,18 @@ const main = async () => {
           END
       `);
       console.log("[migrate] Metadata equipment/body_part ditambahkan tanpa reset data.");
+    }
+
+    if (mode === "phase-a") {
+      console.log("[migrate] Menjalankan sql/phase-a.sql...");
+      const [userColumns] = await koneksi.query("SHOW COLUMNS FROM `users`");
+      if (!userColumns.some((column) => column.Field === "role")) {
+        await koneksi.query(
+          "ALTER TABLE `users` ADD COLUMN `role` ENUM('user','admin') NOT NULL DEFAULT 'user' AFTER `is_premium`"
+        );
+      }
+      await koneksi.query(bacaSql("phase-a.sql"));
+      console.log("[migrate] Fondasi Phase A ditambahkan tanpa reset tabel lama.");
     }
 
     console.log(`[migrate] Selesai (mode=${mode}). Database siap dipakai.`);

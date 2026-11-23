@@ -24,6 +24,10 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `workout_details`;
 DROP TABLE IF EXISTS `workout_logs`;
 DROP TABLE IF EXISTS `exercises`;
+DROP TABLE IF EXISTS `payment_transactions`;
+DROP TABLE IF EXISTS `pricing_plans`;
+DROP TABLE IF EXISTS `equipments`;
+DROP TABLE IF EXISTS `admin_action_logs`;
 DROP TABLE IF EXISTS `users`;
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -37,6 +41,7 @@ CREATE TABLE `users` (
   `email`         VARCHAR(100)  NOT NULL,
   `password`      VARCHAR(255)  NOT NULL,
   `is_premium`    TINYINT(1)    NOT NULL DEFAULT 0,
+  `role`          ENUM('user','admin') NOT NULL DEFAULT 'user',
   `umur`          TINYINT UNSIGNED NULL,
   `gender`        ENUM('male','female') NULL,
   `berat_badan`   DECIMAL(5,2)  NULL,
@@ -47,6 +52,76 @@ CREATE TABLE `users` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `users_email_unique` (`email`),
   UNIQUE KEY `users_username_unique` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `equipments` (
+  `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name`        VARCHAR(100) NOT NULL,
+  `slug`        VARCHAR(60)  NOT NULL,
+  `description` TEXT NULL,
+  `icon`        VARCHAR(20)  NOT NULL DEFAULT '🏋️',
+  `aliases`     JSON NOT NULL,
+  `category`    VARCHAR(40) NOT NULL DEFAULT 'other',
+  `is_active`   TINYINT(1) NOT NULL DEFAULT 1,
+  `sort_order`  INT UNSIGNED NOT NULL DEFAULT 0,
+  `created_at`  DATETIME NOT NULL,
+  `updated_at`  DATETIME NOT NULL,
+  `deleted_at`  DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `equipments_name_unique` (`name`),
+  UNIQUE KEY `equipments_slug_unique` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `pricing_plans` (
+  `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `code`          VARCHAR(40) NOT NULL,
+  `name`          VARCHAR(100) NOT NULL,
+  `description`   TEXT NULL,
+  `price`         DECIMAL(12,2) NOT NULL,
+  `currency`      VARCHAR(3) NOT NULL DEFAULT 'IDR',
+  `duration_days` INT UNSIGNED NOT NULL,
+  `features`      JSON NOT NULL,
+  `is_active`     TINYINT(1) NOT NULL DEFAULT 1,
+  `sort_order`    INT UNSIGNED NOT NULL DEFAULT 0,
+  `created_at`    DATETIME NOT NULL,
+  `updated_at`    DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pricing_plans_code_unique` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `payment_transactions` (
+  `id`                    INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `order_id`              VARCHAR(100) NOT NULL,
+  `user_id`               INT UNSIGNED NOT NULL,
+  `plan_id`               INT UNSIGNED NOT NULL,
+  `plan_name_snapshot`    VARCHAR(100) NOT NULL,
+  `amount_snapshot`       DECIMAL(12,2) NOT NULL,
+  `currency`              VARCHAR(3) NOT NULL DEFAULT 'IDR',
+  `status`                VARCHAR(30) NOT NULL DEFAULT 'pending',
+  `paid_at`               DATETIME NULL,
+  `premium_starts_at`     DATETIME NULL,
+  `premium_expires_at`    DATETIME NULL,
+  `signature_verified`    TINYINT(1) NOT NULL DEFAULT 0,
+  `raw_status`            JSON NULL,
+  `created_at`            DATETIME NOT NULL,
+  `updated_at`            DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `payment_transactions_order_unique` (`order_id`),
+  KEY `payment_transactions_user_index` (`user_id`),
+  KEY `payment_transactions_plan_index` (`plan_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `admin_action_logs` (
+  `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `admin_id`    INT UNSIGNED NOT NULL,
+  `action`      VARCHAR(50) NOT NULL,
+  `entity_type` VARCHAR(50) NOT NULL,
+  `entity_id`   INT UNSIGNED NULL,
+  `before_data` JSON NULL,
+  `after_data`  JSON NULL,
+  `ip_address`  VARCHAR(45) NULL,
+  `created_at`  DATETIME NOT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------

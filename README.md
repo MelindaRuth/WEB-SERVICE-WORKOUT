@@ -167,6 +167,26 @@ Untuk Premium, kirim `peralatan` sebagai daftar dipisahkan koma (contoh:
 exercise; Free tetap menerima template standar dan tidak menggunakan pemetaan
 alat kustom.
 
+### Admin API (Tahap A)
+
+Admin menggunakan JWT terpisah dari status Premium:
+
+- `POST /api/v1/users/login` — mengembalikan `access_token` dan `refresh_token`
+- `POST /api/v1/users/refresh` — memperbarui access token
+- `GET /api/v1/admin/dashboard`
+- `GET/PATCH /api/v1/admin/users`
+- `GET/POST/PATCH/DELETE /api/v1/admin/equipments`
+- `GET/POST/PATCH/DELETE /api/v1/admin/pricing-plans`
+
+Semua route `/api/v1/admin/*` membutuhkan `Authorization: Bearer <access_token>`
+dan role `admin`. Token tidak boleh dibuat dari `is_premium`.
+
+Migrasi database non-destructive untuk instalasi lama:
+
+```bash
+npm run migrate:phase-a
+```
+
 ### Payments (`/api/v1/payments`) — integrasi Midtrans (Snap)
 
 | Method | Path                            | Deskripsi                                                                 | Sukses | Error                                        |

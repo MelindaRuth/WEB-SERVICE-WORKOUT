@@ -7,6 +7,7 @@ const exerciseRouter = require("./exerciseRoutes");
 const workoutLogRouter = require("./workoutLogRoutes");
 const recommendationRouter = require("./recommendationRoutes");
 const paymentRouter = require("./paymentRoutes");
+const adminRouter = require("./adminRoutes");
 
 module.exports = {
   userRouter,
@@ -14,4 +15,5 @@ module.exports = {
   workoutLogRouter,
   recommendationRouter,
   paymentRouter,
+  adminRouter,
 };

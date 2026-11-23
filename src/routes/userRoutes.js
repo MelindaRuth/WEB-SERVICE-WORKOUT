@@ -21,11 +21,13 @@ const {
   deleteUser,
 } = require("../controllers/userController");
 const { listUserWorkoutLogs } = require("../controllers/workoutLogController");
+const { refreshAccessToken } = require("../middlewares/auth");
+const { requireAuth, requireAdmin } = require("../middlewares/auth");
 
 // "/"  -> GET daftar | POST registrasi (divalidasi lebih dulu)
 router
   .route("/")
-  .get(getAllUsers)
+  .get(requireAuth, requireAdmin, getAllUsers)
   .post(validate(schemas.userRegisterSchema), registerUser)
   .all(methodNotAllowed("GET", "POST"));
 
@@ -35,6 +37,11 @@ router
 router
   .route("/login")
   .post(validate(schemas.userLoginSchema), loginUser)
+  .all(methodNotAllowed("POST"));
+
+router
+  .route("/refresh")
+  .post(validate(schemas.authRefreshSchema), refreshAccessToken)
   .all(methodNotAllowed("POST"));
 
 // NESTED RESOURCE: log latihan milik satu user.
@@ -48,8 +55,8 @@ router
 router
   .route("/:id")
   .get(getUserById)
-  .put(validate(schemas.userUpdateSchema), updateUser)
-  .delete(deleteUser)
+  .put(requireAuth, validate(schemas.userUpdateSchema), updateUser)
+  .delete(requireAuth, requireAdmin, deleteUser)
   .all(methodNotAllowed("GET", "PUT", "DELETE"));
 
 module.exports = router;
