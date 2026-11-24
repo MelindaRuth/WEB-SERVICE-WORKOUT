@@ -86,4 +86,41 @@ const api = {
 
   /* -------------------------- RECOMMENDATION ----------------------- */
   generate: (body) => request("/recommendations/generate", { body, method: "POST" }),
+
+  /* ------------------------------ ADMIN ---------------------------- */
+  adminDashboard: () => request("/admin/dashboard"),
+  adminListUsers: (query) => request("/admin/users", { query }),
+  adminUpdateUser: (id, body) => request(`/admin/users/${id}`, { method: "PATCH", body }),
+  adminListEquipments: () => request("/admin/equipments"),
+  adminCreateEquipment: (body) => request("/admin/equipments", { method: "POST", body }),
+  adminUpdateEquipment: (id, body) => request(`/admin/equipments/${id}`, { method: "PATCH", body }),
+  adminDeleteEquipment: (id) => request(`/admin/equipments/${id}`, { method: "DELETE" }),
+  adminListExercises: (query) => request("/admin/exercises", { query }),
+  adminCreateExercise: (body) => request("/admin/exercises", { method: "POST", body }),
+  adminUpdateExercise: (id, body) => request(`/admin/exercises/${id}`, { method: "PATCH", body }),
+  adminDeleteExercise: (id) => request(`/admin/exercises/${id}`, { method: "DELETE" }),
+  adminListPricing: () => request("/admin/pricing-plans"),
+  adminCreatePricing: (body) => request("/admin/pricing-plans", { method: "POST", body }),
+  adminUpdatePricing: (id, body) => request(`/admin/pricing-plans/${id}`, { method: "PATCH", body }),
+  adminDeletePricing: (id) => request(`/admin/pricing-plans/${id}`, { method: "DELETE" }),
+  adminListExerciseMedia: (exerciseId) => request(`/admin/exercises/${exerciseId}/media`),
+  adminDeleteExerciseMedia: (exerciseId, mediaId) =>
+    request(`/admin/exercises/${exerciseId}/media/${mediaId}`, { method: "DELETE" }),
+  adminUploadExerciseMedia: async (exerciseId, file, options = {}) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("source", options.source || "upload");
+    form.append("prompt", options.prompt || "");
+    form.append("is_primary", options.is_primary ? "true" : "false");
+    form.append("credit", options.credit || "");
+    const accessToken = localStorage.getItem(AUTH_KEYS.access);
+    const res = await fetch(`${API_BASE}/admin/exercises/${exerciseId}/media`, {
+      method: "POST",
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      body: form,
+    });
+    const json = await res.json();
+    if (!res.ok) throw new ApiError(json.message || "Upload media gagal", res.status, json.errors, json);
+    return json;
+  },
 };

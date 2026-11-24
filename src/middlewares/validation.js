@@ -530,6 +530,27 @@ const adminUserUpdateSchema = Joi.object({
   tinggi_badan: Joi.number().min(50).max(250).optional().allow(null),
 }).min(1);
 
+const adminExerciseCreateSchema = Joi.object({
+  nama_latihan: Joi.string().trim().min(3).max(100).required(),
+  kategori: Joi.string().valid(...KATEGORI).required(),
+  equipment: Joi.string().valid(...EQUIPMENT).optional().default("bodyweight"),
+  body_part: Joi.string().valid(...BODY_PARTS).optional().default("full body"),
+  kalori_per_menit: Joi.number().positive().max(50).required(),
+  is_premium_only: Joi.boolean().optional().default(false),
+});
+
+const adminExerciseUpdateSchema = adminExerciseCreateSchema.fork(
+  ["nama_latihan", "kategori", "kalori_per_menit"],
+  (schema) => schema.optional()
+);
+
+const exerciseMediaCreateSchema = Joi.object({
+  source: Joi.string().valid("upload", "text_to_image", "external").optional().default("upload"),
+  prompt: Joi.string().trim().max(1000).optional().allow(null, ""),
+  is_primary: Joi.boolean().optional().default(false),
+  credit: Joi.string().trim().max(255).optional().allow(null, ""),
+});
+
 /* ================================================================== */
 /* FACTORY MIDDLEWARE                                                  */
 /* ================================================================== */
@@ -585,5 +606,8 @@ module.exports = {
     pricingPlanCreateSchema,
     pricingPlanUpdateSchema,
     adminUserUpdateSchema,
+    adminExerciseCreateSchema,
+    adminExerciseUpdateSchema,
+    exerciseMediaCreateSchema,
   },
 };

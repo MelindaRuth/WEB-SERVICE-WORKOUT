@@ -1,5 +1,22 @@
 USE `workout_tracker`;
 
+CREATE TABLE IF NOT EXISTS `exercise_media` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `exercise_id` INT UNSIGNED NOT NULL,
+  `media_type` ENUM('image','gif','video') NOT NULL DEFAULT 'image',
+  `url` VARCHAR(500) NOT NULL,
+  `thumbnail_url` VARCHAR(500) NULL,
+  `source` ENUM('upload','text_to_image','external') NOT NULL DEFAULT 'upload',
+  `prompt` TEXT NULL,
+  `status` ENUM('pending','ready','failed') NOT NULL DEFAULT 'ready',
+  `is_primary` TINYINT(1) NOT NULL DEFAULT 0,
+  `credit` VARCHAR(255) NULL,
+  `created_at` DATETIME NOT NULL,
+  `updated_at` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `exercise_media_exercise_index` (`exercise_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT IGNORE INTO `users`
   (`nama`,`username`,`email`,`password`,`is_premium`,`role`,`created_at`,`updated_at`)
 VALUES

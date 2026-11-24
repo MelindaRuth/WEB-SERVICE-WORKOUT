@@ -539,6 +539,53 @@ textarea.fit-input {
   opacity: 0.55;
 }
 
+.fit-admin-tabs {
+  scrollbar-width: thin;
+}
+
+.fit-admin-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fit-admin-table-wrap {
+  padding: 0;
+  overflow: hidden;
+}
+
+.fit-admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--fit-border);
+}
+
+.fit-admin-row:last-child {
+  border-bottom: 0;
+}
+
+@media (min-width: 900px) {
+  .fit-admin-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599px) {
+  .fit-admin-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .fit-admin-row > .d-flex {
+    width: 100%;
+  }
+  .fit-admin-row > .d-flex .btn {
+    flex: 1;
+  }
+}
+
 .fit-btn-primary:hover:not(:disabled) {
   filter: brightness(1.08);
   color: #0b0b0b;

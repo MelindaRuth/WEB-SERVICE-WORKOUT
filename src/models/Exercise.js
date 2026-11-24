@@ -34,6 +34,10 @@ module.exports = (sequelize, DataTypes) => {
         otherKey: "workout_log_id",
         as: "workout_logs",
       });
+      Exercise.hasMany(models.ExerciseMedia, {
+        foreignKey: "exercise_id",
+        as: "media",
+      });
     }
   }
 

@@ -7,7 +7,10 @@ const {
   PricingPlan,
   PaymentTransaction,
   AdminActionLog,
+  ExerciseMedia,
 } = require("../models");
+const fs = require("fs");
+const path = require("path");
 
 const audit = async (req, action, entityType, entityId, beforeData, afterData) =>
   AdminActionLog.create({
@@ -176,6 +179,100 @@ const updateUserAdmin = async (req, res) => {
   return res.status(200).json({ status: "success", message: "User berhasil diperbarui", data: user });
 };
 
+const listExercisesAdmin = async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 100, 100);
+  const offset = Number(req.query.offset) || 0;
+  const where = {};
+  if (req.query.keyword) where.nama_latihan = { [Op.like]: `%${String(req.query.keyword).trim()}%` };
+  if (req.query.category) where.kategori = req.query.category;
+  if (req.query.equipment) where.equipment = req.query.equipment;
+  const { count, rows } = await Exercise.findAndCountAll({
+    where,
+    limit,
+    offset,
+    order: [["id", "ASC"]],
+  });
+  return res.status(200).json({ status: "success", total: count, limit, offset, data: rows });
+};
+
+const createExerciseAdmin = async (req, res) => {
+  const existing = await Exercise.findOne({ where: { nama_latihan: req.validated.nama_latihan } });
+  if (existing) return res.status(409).json({ status: "fail", message: "Nama latihan sudah digunakan" });
+  const exercise = await Exercise.create(req.validated);
+  await audit(req, "create", "exercise", exercise.id, null, exercise.get({ plain: true }));
+  return res.status(201).json({ status: "success", message: "Exercise berhasil ditambahkan", data: exercise });
+};
+
+const updateExerciseAdmin = async (req, res) => {
+  const exercise = await Exercise.findByPk(req.params.id);
+  if (!exercise) return res.status(404).json({ status: "fail", message: "Exercise tidak ditemukan" });
+  const before = exercise.get({ plain: true });
+  await exercise.update(req.validated);
+  await audit(req, "update", "exercise", exercise.id, before, exercise.get({ plain: true }));
+  return res.status(200).json({ status: "success", message: "Exercise berhasil diperbarui", data: exercise });
+};
+
+const deleteExerciseAdmin = async (req, res) => {
+  const exercise = await Exercise.findByPk(req.params.id);
+  if (!exercise) return res.status(404).json({ status: "fail", message: "Exercise tidak ditemukan" });
+  const usageCount = await WorkoutLog.count({
+    include: [{ model: Exercise, as: "exercises", where: { id: exercise.id }, attributes: [] }],
+  });
+  if (usageCount > 0) return res.status(409).json({
+    status: "fail",
+    message: `Exercise masih dipakai pada ${usageCount} workout log dan tidak dapat dihapus`,
+  });
+  await exercise.destroy();
+  await audit(req, "delete", "exercise", exercise.id, exercise.get({ plain: true }), null);
+  return res.status(200).json({ status: "success", message: "Exercise berhasil dihapus" });
+};
+
+const listExerciseMedia = async (req, res) => {
+  const exercise = await Exercise.findByPk(req.params.id);
+  if (!exercise) return res.status(404).json({ status: "fail", message: "Exercise tidak ditemukan" });
+  const media = await ExerciseMedia.findAll({
+    where: { exercise_id: exercise.id },
+    order: [["is_primary", "DESC"], ["id", "DESC"]],
+  });
+  return res.status(200).json({ status: "success", data: media });
+};
+
+const createExerciseMedia = async (req, res) => {
+  const exercise = await Exercise.findByPk(req.params.id);
+  if (!exercise) return res.status(404).json({ status: "fail", message: "Exercise tidak ditemukan" });
+  if (!req.file) return res.status(400).json({ status: "fail", message: "Field file media wajib dipilih" });
+
+  const ext = path.extname(req.file.filename).toLowerCase();
+  const mediaType = [".gif"].includes(ext) ? "gif" : [".mp4", ".webm", ".mov"].includes(ext) ? "video" : "image";
+  if (req.validated.is_primary) {
+    await ExerciseMedia.update({ is_primary: false }, { where: { exercise_id: exercise.id } });
+  }
+  const media = await ExerciseMedia.create({
+    exercise_id: exercise.id,
+    media_type: mediaType,
+    url: `/uploads/exercises/${req.file.filename}`,
+    source: req.validated.source || "upload",
+    prompt: req.validated.prompt || null,
+    status: "ready",
+    is_primary: Boolean(req.validated.is_primary),
+    credit: req.validated.credit || null,
+  });
+  await audit(req, "upload", "exercise_media", media.id, null, media.get({ plain: true }));
+  return res.status(201).json({ status: "success", message: "Media exercise berhasil ditambahkan", data: media });
+};
+
+const deleteExerciseMedia = async (req, res) => {
+  const media = await ExerciseMedia.findByPk(req.params.mediaId);
+  if (!media) return res.status(404).json({ status: "fail", message: "Media tidak ditemukan" });
+  if (media.url.startsWith("/uploads/")) {
+    const filePath = path.join(process.cwd(), "public", media.url.replace(/^\//, ""));
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+  await media.destroy();
+  await audit(req, "delete", "exercise_media", media.id, media.get({ plain: true }), null);
+  return res.status(200).json({ status: "success", message: "Media exercise berhasil dihapus" });
+};
+
 module.exports = {
   dashboard,
   listEquipments,
@@ -188,4 +285,11 @@ module.exports = {
   deletePricingPlan,
   listUsers,
   updateUserAdmin,
+  listExercisesAdmin,
+  createExerciseAdmin,
+  updateExerciseAdmin,
+  deleteExerciseAdmin,
+  listExerciseMedia,
+  createExerciseMedia,
+  deleteExerciseMedia,
 };

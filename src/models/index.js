@@ -38,6 +38,7 @@ const Equipment = require("./Equipment");
 const PricingPlan = require("./PricingPlan");
 const PaymentTransaction = require("./PaymentTransaction");
 const AdminActionLog = require("./AdminActionLog");
+const ExerciseMedia = require("./ExerciseMedia");
 
 db.User = User(sequelize, sequelize.Sequelize);
 db.Exercise = Exercise(sequelize, sequelize.Sequelize);
@@ -47,6 +48,7 @@ db.Equipment = Equipment(sequelize, sequelize.Sequelize);
 db.PricingPlan = PricingPlan(sequelize, sequelize.Sequelize);
 db.PaymentTransaction = PaymentTransaction(sequelize, sequelize.Sequelize);
 db.AdminActionLog = AdminActionLog(sequelize, sequelize.Sequelize);
+db.ExerciseMedia = ExerciseMedia(sequelize, sequelize.Sequelize);
 
 // Relasi dinyatakan SETELAH semua model ada. Urutan di objek `db`
 // tidak penting; yang penting semua sudah terdaftar di baris atas.

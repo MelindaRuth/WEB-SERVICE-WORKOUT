@@ -167,21 +167,44 @@ function setSidebarOpen(open) {
   button.setAttribute("aria-expanded", String(open));
 }
 
+let deferredPwaInstall = null;
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredPwaInstall = event;
+  toast("FITAI siap dipasang sebagai aplikasi");
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredPwaInstall = null;
+  toast("FITAI berhasil dipasang ✅");
+});
+
 function updateTopbar() {
   if (!state.user) return;
   $("#avatarLetter").textContent = (state.user.username || state.user.nama || "F").slice(0, 1).toUpperCase();
   $("#topStreak").textContent = hitungStreak(state.logs);
+  $$(".admin-only").forEach((item) => {
+    item.hidden = state.user.role !== "admin";
+  });
 }
 
 /* ==================================================================== */
 /* 3. ROUTER                                                             */
 /* ==================================================================== */
 
-const ROUTES = { home: renderHome, log: renderLog, coach: renderCoach, progress: renderProgress };
+const ROUTES = {
+  home: renderHome,
+  log: renderLog,
+  coach: renderCoach,
+  progress: renderProgress,
+  admin: renderAdmin,
+};
 
 const currentRoute = () => {
   const raw = (location.hash || "#/home").replace(/^#\/?/, "").split("?")[0];
-  return ROUTES[raw] ? raw : "home";
+  const routeName = raw.startsWith("admin/") ? "admin" : raw;
+  return ROUTES[routeName] ? routeName : "home";
 };
 
 async function renderRoute() {
@@ -1469,7 +1492,269 @@ function bindLogGerakan(root) {
 }
 
 /* ==================================================================== */
-/* 7. HALAMAN PROGRESS                                                   */
+/* 7. HALAMAN ADMIN                                                      */
+/* ==================================================================== */
+
+const ADMIN_TABS = [
+  ["dashboard", "DASHBOARD"],
+  ["users", "USERS"],
+  ["equipments", "EQUIPMENT"],
+  ["exercises", "EXERCISES"],
+  ["pricing", "PRICING"],
+];
+
+async function renderAdmin(app) {
+  if (state.user?.role !== "admin") {
+    app.innerHTML = `<div class="fit-card"><p class="fit-mono mb-2">AKSES DITOLAK</p><p>Halaman ini khusus administrator.</p><a href="#/home" class="btn fit-btn-primary">KEMBALI</a></div>`;
+    return;
+  }
+
+  const raw = (location.hash || "").replace(/^#\/admin\/?/, "").split("?")[0];
+  const active = ADMIN_TABS.map(([key]) => key).includes(raw) ? raw : "dashboard";
+
+  app.innerHTML = `
+    <section class="fit-hero">
+      <div><p class="fit-mono mb-1">CONTROL CENTER</p><h1 class="fit-display fit-page-title">ADMIN</h1></div>
+      <span class="fit-badge-lime">ADMIN ✦</span>
+    </section>
+    <div class="fit-admin-tabs d-flex gap-2 overflow-auto mb-3">
+      ${ADMIN_TABS.map(([key, label]) => `<a class="btn fit-chip ${active === key ? "active" : ""}" href="#/admin/${key}">${label}</a>`).join("")}
+    </div>
+    <div id="adminPanel"><div class="text-center py-5"><div class="spinner-border text-success"></div></div></div>`;
+
+  const panel = $("#adminPanel");
+  try {
+    if (active === "dashboard") await renderAdminDashboard(panel);
+    if (active === "users") await renderAdminUsers(panel);
+    if (active === "equipments") await renderAdminEquipments(panel);
+    if (active === "exercises") await renderAdminExercises(panel);
+    if (active === "pricing") await renderAdminPricing(panel);
+  } catch (err) {
+    panel.innerHTML = `<div class="fit-card"><p class="text-danger mb-0">${esc(err.message)}</p></div>`;
+  }
+}
+
+async function renderAdminDashboard(panel) {
+  const res = await api.adminDashboard();
+  const d = res.data;
+  const cards = [
+    ["USER", d.total_users],
+    ["FREE", d.free_users],
+    ["PREMIUM", d.premium_users],
+    ["ADMIN", d.admin_users],
+    ["EXERCISES", d.total_exercises],
+    ["EQUIPMENT", d.total_equipments],
+  ];
+  panel.innerHTML = `
+    <div class="fit-admin-stat-grid">
+      ${cards.map(([label, value]) => `<div class="fit-card"><p class="fit-mono mb-1">${label}</p><div class="fit-stat-value">${value}</div></div>`).join("")}
+    </div>
+    <div class="row g-3 mt-1">
+      <div class="col-md-6"><div class="fit-card"><p class="fit-mono mb-1">WORKOUT LOG</p><div class="fit-stat-value">${d.total_workout_logs}</div></div></div>
+      <div class="col-md-6"><div class="fit-card"><p class="fit-mono mb-1">TRANSAKSI PAID</p><div class="fit-stat-value">${d.paid_transactions}</div></div></div>
+    </div>`;
+}
+
+async function renderAdminUsers(panel) {
+  const res = await api.adminListUsers({ limit: 100 });
+  panel.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="fit-section-title mb-0">PENGELOLAAN USER</h2>
+      <span class="fit-mono">${res.total} user</span>
+    </div>
+    <div class="fit-card fit-admin-table-wrap">
+      ${res.data.map((u) => `
+        <div class="fit-admin-row" data-user-row="${u.id}">
+          <div><b>${esc(u.nama)}</b><div class="fit-mono">${esc(u.email)} · ${u.role} · ${u.is_premium ? "PREMIUM" : "FREE"}</div></div>
+          <div class="d-flex gap-2">
+            <button class="btn fit-chip" data-user-premium="${u.id}" data-value="${u.is_premium ? "false" : "true"}">${u.is_premium ? "SET FREE" : "SET PREMIUM"}</button>
+            ${u.role === "admin" ? `<button class="btn fit-chip" data-user-role="${u.id}" data-value="user">SET USER</button>` : `<button class="btn fit-chip" data-user-role="${u.id}" data-value="admin">SET ADMIN</button>`}
+          </div>
+        </div>`).join("")}
+    </div>`;
+
+  $$("[data-user-premium]", panel).forEach((b) => b.addEventListener("click", () => updateAdminUser(b.dataset.userPremium, { is_premium: b.dataset.value === "true" })));
+  $$("[data-user-role]", panel).forEach((b) => b.addEventListener("click", () => updateAdminUser(b.dataset.userRole, { role: b.dataset.value })));
+}
+
+async function updateAdminUser(id, body) {
+  try {
+    await api.adminUpdateUser(id, body);
+    toast("User berhasil diperbarui ✅");
+    await renderRoute();
+  } catch (err) {
+    toast(err.message, "danger");
+  }
+}
+
+async function renderAdminEquipments(panel) {
+  const res = await api.adminListEquipments();
+  panel.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="fit-section-title mb-0">EQUIPMENT</h2><button class="btn fit-btn-primary" id="adminAddEquipment">+ TAMBAH</button></div>
+    <div class="fit-card fit-admin-table-wrap">
+      ${res.data.map((e) => `<div class="fit-admin-row">
+        <div><b>${esc(e.icon)} ${esc(e.name)}</b><div class="fit-mono">${esc(e.slug)} · ${esc(e.category)} · ${e.is_active ? "AKTIF" : "NONAKTIF"}</div></div>
+        <div class="d-flex gap-2"><button class="btn fit-chip" data-edit-equipment="${e.id}">EDIT</button><button class="btn fit-chip" data-delete-equipment="${e.id}">HAPUS</button></div>
+      </div>`).join("")}
+    </div>`;
+
+  $("#adminAddEquipment").addEventListener("click", () => openEquipmentModal());
+  $$("[data-edit-equipment]", panel).forEach((b) => b.addEventListener("click", () => openEquipmentModal(res.data.find((e) => e.id === Number(b.dataset.editEquipment)))));
+  $$("[data-delete-equipment]", panel).forEach((b) => b.addEventListener("click", () => deleteEquipmentConfirm(Number(b.dataset.deleteEquipment))));
+}
+
+async function openEquipmentModal(existing = null) {
+  const result = prompt(existing ? "Masukkan data dalam format: nama|slug|category|icon|aliases(pisahkan koma)" : "Masukkan data: nama|slug|category|icon|aliases(pisahkan koma)");
+  if (!result) return;
+  const [name, slug, category = "other", icon = "🏋️", aliases = ""] = result.split("|").map((v) => v.trim());
+  if (!name) return;
+  const body = { name, slug: slug || name, category, icon, aliases: aliases ? aliases.split(",").map((v) => v.trim()).filter(Boolean) : [] };
+  try {
+    if (existing) await api.adminUpdateEquipment(existing.id, body);
+    else await api.adminCreateEquipment(body);
+    toast("Equipment berhasil disimpan ✅");
+    await renderRoute();
+  } catch (err) {
+    toast(err.message, "danger");
+  }
+}
+
+async function deleteEquipmentConfirm(id) {
+  if (!window.confirm("Hapus/nonaktifkan equipment ini?")) return;
+  try {
+    await api.adminDeleteEquipment(id);
+    toast("Equipment diperbarui ✅");
+    await renderRoute();
+  } catch (err) {
+    toast(err.message, "danger");
+  }
+}
+
+async function renderAdminExercises(panel) {
+  const res = await api.adminListExercises({ limit: 100 });
+  panel.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="fit-section-title mb-0">EXERCISES</h2><button class="btn fit-btn-primary" id="adminAddExercise">+ TAMBAH</button></div>
+    <div class="fit-card fit-admin-table-wrap">
+      ${res.data.map((e) => `<div class="fit-admin-row">
+        <div><b>${esc(e.nama_latihan)}</b><div class="fit-mono">${esc(e.kategori)} · ${esc(e.equipment)} · ${esc(e.body_part)} · ${num(e.kalori_per_menit)} kcal/m</div></div>
+        <div class="d-flex gap-2">
+          <button class="btn fit-chip" data-media-exercise="${e.id}">MEDIA</button>
+          <button class="btn fit-chip" data-delete-exercise="${e.id}">HAPUS</button>
+        </div>
+      </div>`).join("")}
+    </div>`;
+  $("#adminAddExercise").addEventListener("click", openExerciseModal);
+  $$("[data-media-exercise]", panel).forEach((b) => b.addEventListener("click", () => openExerciseMediaModal(Number(b.dataset.mediaExercise))));
+  $$("[data-delete-exercise]", panel).forEach((b) => b.addEventListener("click", () => deleteExerciseConfirm(Number(b.dataset.deleteExercise))));
+}
+
+async function openExerciseMediaModal(exerciseId) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*,.gif,video/mp4,video/webm";
+  input.style.display = "none";
+  document.body.appendChild(input);
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const prompt = window.prompt("Prompt/text-to-image (opsional):", "");
+    const primary = window.confirm("Jadikan sebagai media utama exercise?");
+    try {
+      await api.adminUploadExerciseMedia(exerciseId, file, {
+        source: prompt ? "text_to_image" : "upload",
+        prompt,
+        is_primary: primary,
+      });
+      toast("Media exercise berhasil diunggah ✅");
+      await renderRoute();
+    } catch (err) {
+      toast(err.message, "danger");
+    } finally {
+      input.remove();
+    }
+  }, { once: true });
+  input.click();
+}
+
+async function openExerciseModal() {
+  const input = prompt("Format: nama_latihan|kategori|equipment|body_part|kalori|premium(false/true)");
+  if (!input) return;
+  const [nama_latihan, kategori, equipment, body_part, calories, premium] = input.split("|").map((v) => v.trim());
+  try {
+    await api.adminCreateExercise({
+      nama_latihan,
+      kategori,
+      equipment: equipment || "bodyweight",
+      body_part: body_part || "full body",
+      kalori_per_menit: Number(calories || 5),
+      is_premium_only: premium === "true",
+    });
+    toast("Exercise berhasil ditambahkan ✅");
+    await renderRoute();
+  } catch (err) {
+    toast(err.message, "danger");
+  }
+}
+
+async function deleteExerciseConfirm(id) {
+  if (!window.confirm("Hapus exercise ini?")) return;
+  try {
+    await api.adminDeleteExercise(id);
+    toast("Exercise berhasil dihapus ✅");
+    await renderRoute();
+  } catch (err) {
+    toast(err.message, "danger");
+  }
+}
+
+async function renderAdminPricing(panel) {
+  const res = await api.adminListPricing();
+  panel.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="fit-section-title mb-0">PRICING PLANS</h2><button class="btn fit-btn-primary" id="adminAddPricing">+ TAMBAH</button></div>
+    <div class="fit-card fit-admin-table-wrap">
+      ${res.data.map((p) => `<div class="fit-admin-row">
+        <div><b>${esc(p.name)}</b><div class="fit-mono">${esc(p.code)} · Rp${num(p.price)} · ${p.duration_days} hari · ${p.is_active ? "AKTIF" : "NONAKTIF"}</div></div>
+        <button class="btn fit-chip" data-delete-pricing="${p.id}">HAPUS</button>
+      </div>`).join("")}
+    </div>`;
+  $("#adminAddPricing").addEventListener("click", openPricingModal);
+  $$("[data-delete-pricing]", panel).forEach((b) => b.addEventListener("click", () => deletePricingConfirm(Number(b.dataset.deletePricing))));
+}
+
+async function openPricingModal() {
+  const input = prompt("Format: code|nama|harga|duration_days");
+  if (!input) return;
+  const [code, name, price, duration] = input.split("|").map((v) => v.trim());
+  try {
+    await api.adminCreatePricing({
+      code,
+      name,
+      price: Number(price),
+      duration_days: Number(duration),
+      currency: "IDR",
+      features: ["AI Coach", "Custom Equipment"],
+      is_active: true,
+    });
+    toast("Paket berhasil ditambahkan ✅");
+    await renderRoute();
+  } catch (err) {
+    toast(err.message, "danger");
+  }
+}
+
+async function deletePricingConfirm(id) {
+  if (!window.confirm("Hapus/nonaktifkan paket ini?")) return;
+  try {
+    await api.adminDeletePricing(id);
+    toast("Paket diperbarui ✅");
+    await renderRoute();
+  } catch (err) {
+    toast(err.message, "danger");
+  }
+}
+
+/* ==================================================================== */
+/* 8. HALAMAN PROGRESS                                                   */
 /* ==================================================================== */
 
 async function renderProgress(app) {
@@ -1747,6 +2032,11 @@ window.addEventListener("hashchange", () => {
 
 document.addEventListener("DOMContentLoaded", async () => {
   applyTheme(currentTheme());
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js").catch((err) => {
+      console.warn("Service worker belum aktif:", err);
+    });
+  }
   bindShell();
   bindProfile();
   bindDemoModal();

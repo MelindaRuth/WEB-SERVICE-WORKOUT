@@ -23,6 +23,7 @@ USE `workout_tracker`;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `workout_details`;
 DROP TABLE IF EXISTS `workout_logs`;
+DROP TABLE IF EXISTS `exercise_media`;
 DROP TABLE IF EXISTS `exercises`;
 DROP TABLE IF EXISTS `payment_transactions`;
 DROP TABLE IF EXISTS `pricing_plans`;
@@ -140,6 +141,26 @@ CREATE TABLE `exercises` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `exercises_nama_latihan_unique` (`nama_latihan`),
   KEY `exercises_kategori_index` (`kategori`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `exercise_media` (
+  `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `exercise_id`   INT UNSIGNED NOT NULL,
+  `media_type`    ENUM('image','gif','video') NOT NULL DEFAULT 'image',
+  `url`           VARCHAR(500) NOT NULL,
+  `thumbnail_url` VARCHAR(500) NULL,
+  `source`        ENUM('upload','text_to_image','external') NOT NULL DEFAULT 'upload',
+  `prompt`        TEXT NULL,
+  `status`        ENUM('pending','ready','failed') NOT NULL DEFAULT 'ready',
+  `is_primary`    TINYINT(1) NOT NULL DEFAULT 0,
+  `credit`        VARCHAR(255) NULL,
+  `created_at`    DATETIME NOT NULL,
+  `updated_at`    DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `exercise_media_exercise_index` (`exercise_id`),
+  CONSTRAINT `fk_exercise_media_exercise`
+    FOREIGN KEY (`exercise_id`) REFERENCES `exercises` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
