@@ -15,6 +15,7 @@
 const { fn, col, where: rawWhere } = require("sequelize");
 const bcrypt = require("bcryptjs");
 const { User, WorkoutLog } = require("../models");
+const { signAccessToken, signRefreshToken } = require("../utils/authTokens");
 
 // Biaya hashing bcrypt. 10 adalah keseimbangan wajar aman-cepat untuk API.
 const BCRYPT_ROUNDS = 10;
@@ -85,6 +86,7 @@ const registerUser = async (req, res) => {
     berat_badan,
     tinggi_badan,
     is_premium: false,
+    role: "user",
   });
 
   // defaultScope menyembunyikan password HANYA pada hasil finder (findByPk/
@@ -124,7 +126,11 @@ const loginUser = async (req, res) => {
   return res.status(200).json({
     status: "success",
     message: `Login berhasil, selamat datang ${user.username || user.nama}`,
-    data: tanpaPassword,
+    data: {
+      ...tanpaPassword,
+      access_token: signAccessToken(user),
+      refresh_token: signRefreshToken(user),
+    },
   });
 };
 
@@ -204,6 +210,19 @@ const updateUser = async (req, res) => {
     return res
       .status(404)
       .json({ status: "fail", message: `User dengan id ${req.params.id} tidak ditemukan` });
+  }
+
+  const isOwner = req.auth && Number(req.auth.user_id) === Number(req.params.id);
+  if (!isOwner && (!req.auth || req.auth.role !== "admin")) {
+    return res.status(403).json({ status: "fail", message: "Anda tidak dapat mengubah profil user lain" });
+  }
+
+  if ((req.validated.role !== undefined || req.validated.is_premium !== undefined) &&
+      (!req.auth || req.auth.role !== "admin")) {
+    return res.status(403).json({
+      status: "fail",
+      message: "Hanya administrator yang dapat mengubah role atau status Premium",
+    });
   }
 
   // user.update() mengubah HANYA field di req.validated, menjalankan

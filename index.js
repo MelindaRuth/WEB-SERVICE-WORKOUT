@@ -21,6 +21,7 @@ const {
   workoutLogRouter,
   recommendationRouter,
   paymentRouter,
+  adminRouter,
 } = require("./src/routes");
 const { testConnection, syncDatabase } = require("./src/config/database");
 
@@ -51,6 +52,7 @@ app.get("/", (req, res) =>
       "/api/v1/recommendations/generate",
       "/api/v1/payments/transaction",
       "/api/v1/payments/notification",
+      "/api/v1/admin/dashboard",
     ],
   })
 );
@@ -60,6 +62,7 @@ app.use("/api/v1/exercises", exerciseRouter);
 app.use("/api/v1/workout-logs", workoutLogRouter);
 app.use("/api/v1/recommendations", recommendationRouter);
 app.use("/api/v1/payments", paymentRouter);
+app.use("/api/v1/admin", adminRouter);
 
 /* ------------------------------------------------------------------ */
 /* 2b. FRONTEND (halaman HTML/JS/CSS)                                  */

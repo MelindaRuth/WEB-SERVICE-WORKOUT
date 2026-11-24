@@ -108,6 +108,18 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: false, // registrasi baru selalu mulai sebagai user Free
       },
 
+      role: {
+        type: DataTypes.ENUM("user", "admin"),
+        allowNull: false,
+        defaultValue: "user",
+        validate: {
+          isIn: {
+            args: [["user", "admin"]],
+            msg: "Field role harus salah satu dari: user, admin",
+          },
+        },
+      },
+
       umur: {
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: true, // metrik demografi boleh belum diisi saat registrasi
@@ -194,6 +206,7 @@ module.exports = (sequelize, DataTypes) => {
             "email",
             "password",
             "is_premium",
+            "role",
             "umur",
             "gender",
             "berat_badan",

@@ -9,6 +9,7 @@ const router = express.Router();
 
 const methodNotAllowed = require("../middlewares/methodNotAllowed");
 const { validate, schemas } = require("../middlewares/validation");
+const { requireAuth, requireAdmin } = require("../middlewares/auth");
 
 const {
   getAllExercises,
@@ -20,13 +21,13 @@ const {
 router
   .route("/")
   .get(validate(schemas.exerciseQuerySchema, "query"), getAllExercises)
-  .post(validate(schemas.exerciseCreateSchema), createExercise)
+  .post(requireAuth, requireAdmin, validate(schemas.exerciseCreateSchema), createExercise)
   .all(methodNotAllowed("GET", "POST"));
 
 router
   .route("/:id")
-  .patch(validate(schemas.exerciseUpdateSchema), updateExercise)
-  .delete(deleteExercise)
+  .patch(requireAuth, requireAdmin, validate(schemas.exerciseUpdateSchema), updateExercise)
+  .delete(requireAuth, requireAdmin, deleteExercise)
   .all(methodNotAllowed("PATCH", "DELETE"));
 
 module.exports = router;

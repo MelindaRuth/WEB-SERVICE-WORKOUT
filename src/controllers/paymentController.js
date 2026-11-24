@@ -20,7 +20,7 @@
  */
 const crypto = require("crypto");
 const midtransClient = require("midtrans-client");
-const { User } = require("../models");
+const { User, PricingPlan, PaymentTransaction } = require("../models");
 
 /* ------------------------------------------------------------------ */
 /* Konfigurasi — SEMUA dari .env, tidak ada rahasia di kode.           */
@@ -29,7 +29,6 @@ const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const IS_PRODUCTION =
   String(process.env.MIDTRANS_IS_PRODUCTION).toLowerCase() === "true";
 // Nominal (Rupiah) untuk upgrade premium. Sama dipakai saat create & verifikasi.
-const PREMIUM_AMOUNT = Number(process.env.PREMIUM_AMOUNT) || 25000;
 
 // Satu instance Snap dibuat sekali, dipakai ulang (stateless & aman).
 let _snap = null;
@@ -75,7 +74,7 @@ const signatureValid = ({ order_id, status_code, gross_amount, signature_key }) 
 /* POST /api/v1/payments/transaction                                   */
 /* ================================================================== */
 const createTransaction = async (req, res) => {
-  const { user_id } = req.validated; // sudah dibersihkan Joi; BUKAN req.body mentah
+  const { user_id, plan_id } = req.validated;
 
   if (!MIDTRANS_SERVER_KEY) {
     console.error("[MIDTRANS] MIDTRANS_SERVER_KEY belum diisi di .env");
@@ -100,6 +99,17 @@ const createTransaction = async (req, res) => {
       .json({ status: "fail", message: "User ini sudah berstatus Premium" });
   }
 
+  const plan = plan_id
+    ? await PricingPlan.findOne({ where: { id: plan_id, is_active: true } })
+    : await PricingPlan.findOne({ where: { is_active: true }, order: [["sort_order", "ASC"]] });
+  if (!plan) {
+    return res.status(404).json({
+      status: "fail",
+      message: "Paket premium aktif tidak ditemukan",
+    });
+  }
+  const PREMIUM_AMOUNT = Number(plan.price);
+
   // 3) bangun order_id unik dari sisi server (user_id + waktu).
   const order_id = `PREM-${user.id}-${Date.now()}`;
 
@@ -115,13 +125,24 @@ const createTransaction = async (req, res) => {
           id: "premium-subscription",
           price: PREMIUM_AMOUNT,
           quantity: 1,
-          name: "Upgrade Premium — Rekomendasi Latihan AI",
+          name: plan.name,
         },
       ],
       customer_details: {
         first_name: user.nama,
         email: user.email,
       },
+    });
+
+    await PaymentTransaction.create({
+      order_id,
+      user_id: user.id,
+      plan_id: plan.id,
+      plan_name_snapshot: plan.name,
+      amount_snapshot: PREMIUM_AMOUNT,
+      currency: plan.currency,
+      status: "pending",
+      signature_verified: false,
     });
 
     // 5) kembalikan hanya yang dibutuhkan klien. Response Midtrans TIDAK
@@ -173,8 +194,15 @@ const midtransNotification = async (req, res) => {
       .json({ status: "fail", message: "Verifikasi signature notifikasi gagal" });
   }
 
-  // 2) cocokkan nominal agar tidak bisa dimanipulasi (uang palsu).
-  if (Number(gross_amount) !== PREMIUM_AMOUNT) {
+  // 2) cocokkan nominal dengan snapshot paket pada transaksi.
+  const transaction = await PaymentTransaction.findOne({ where: { order_id } });
+  if (!transaction) {
+    return res.status(404).json({
+      status: "fail",
+      message: "Transaksi tidak ditemukan",
+    });
+  }
+  if (Number(gross_amount) !== Number(transaction.amount_snapshot)) {
     console.warn("[MIDTRANS] gross_amount tidak sesuai:", gross_amount);
     return res.status(400).json({
       status: "fail",
@@ -195,6 +223,11 @@ const midtransNotification = async (req, res) => {
   // 4) bukan status lunas -> akui (200) tanpa mengubah apa pun.
   //    Ini normal: Midtrans mengirim beberapa status (pending/expired/denied).
   if (!STATUS_LUNAS.includes(transaction_status)) {
+    await transaction.update({
+      status: transaction_status,
+      signature_verified: true,
+      raw_status: body,
+    });
     return res.status(200).json({
       status: "success",
       message: `Status '${transaction_status}' diterima, tidak ada perubahan premium`,
@@ -204,6 +237,7 @@ const midtransNotification = async (req, res) => {
   // 5) capture kartu kredit/one-klik: tunggu peninjauan fraud sebelum memberi akses.
   if (transaction_status === "capture") {
     if (fraud_status && fraud_status !== "accept") {
+      await transaction.update({ status: "capture_pending", signature_verified: true, raw_status: body });
       return res.status(200).json({
         status: "success",
         message: `Capture menunggu verifikasi fraud (${fraud_status}), premium belum diaktifkan`,
@@ -221,8 +255,27 @@ const midtransNotification = async (req, res) => {
 
   // 7) naikkan premium. Idempoten: dipanggil ulang (retry Midtrans) tetap aman.
   if (!user.is_premium) {
+    const startsAt = new Date();
+    const plan = await PricingPlan.findByPk(transaction.plan_id);
+    const expiresAt = new Date(startsAt);
+    expiresAt.setDate(expiresAt.getDate() + (plan ? plan.duration_days : 30));
     await user.update({ is_premium: true });
+    await transaction.update({
+      status: transaction_status,
+      paid_at: startsAt,
+      premium_starts_at: startsAt,
+      premium_expires_at: expiresAt,
+      signature_verified: true,
+      raw_status: body,
+    });
     console.log(`[MIDTRANS] user ${user.id} -> PREMIUM (${transaction_status}, ${order_id})`);
+  } else {
+    await transaction.update({
+      status: transaction_status,
+      paid_at: transaction.paid_at || new Date(),
+      signature_verified: true,
+      raw_status: body,
+    });
   }
 
   return res.status(200).json({

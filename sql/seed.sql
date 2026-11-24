@@ -9,6 +9,7 @@
 --    user 1 (Sari,  Premium) -> "password123"
 --    user 2 (Andi,  Free)    -> "rahasia123"
 --    user 3 (Bima,  Free)    -> "rahasia123"
+--    admin (Administrator)   -> "password123"
 -- ============================================================================
 
 USE `workout_tracker`;
@@ -17,22 +18,51 @@ SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE `workout_details`;
 TRUNCATE TABLE `workout_logs`;
 TRUNCATE TABLE `exercises`;
+TRUNCATE TABLE `payment_transactions`;
+TRUNCATE TABLE `pricing_plans`;
+TRUNCATE TABLE `equipments`;
+TRUNCATE TABLE `admin_action_logs`;
 TRUNCATE TABLE `users`;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ---- users -----------------------------------------------------------------
 INSERT INTO `users`
-  (`id`, `nama`, `username`, `email`, `password`, `is_premium`, `umur`, `gender`, `berat_badan`, `tinggi_badan`, `created_at`, `updated_at`, `deleted_at`)
+  (`id`, `nama`, `username`, `email`, `password`, `is_premium`, `role`, `umur`, `gender`, `berat_badan`, `tinggi_badan`, `created_at`, `updated_at`, `deleted_at`)
 VALUES
   (1, 'Sari Wibowo', 'sari', 'sari@test.com',
       '$2b$10$RnmzCO/TlujrwKu.jis0G..8X8KytdbQEEYBE4h0TDAMiPqqnLPeK',
-      1, 24, 'female', 62.50, 165.00, NOW(), NOW(), NULL),
+      1, 'user', 24, 'female', 62.50, 165.00, NOW(), NOW(), NULL),
   (2, 'Andi Pratama', 'andi', 'andi@test.com',
       '$2b$10$5iF8/AsXPPS1c.CcrXjx2eylON3gf4Fm2/Z7RwJCQNnEt3A7rtkpy',
-      0, 27, 'male', 70.00, 172.00, NOW(), NOW(), NULL),
+      0, 'user', 27, 'male', 70.00, 172.00, NOW(), NOW(), NULL),
   (3, 'Bima Saputra', 'bima', 'bima@test.com',
       '$2b$10$5iF8/AsXPPS1c.CcrXjx2eylON3gf4Fm2/Z7RwJCQNnEt3A7rtkpy',
-      0, NULL, NULL, NULL, NULL, NOW(), NOW(), NULL);
+      0, 'user', NULL, NULL, NULL, NULL, NOW(), NOW(), NULL),
+  (4, 'Administrator', 'admin', 'admin@fitai.local',
+      '$2b$10$RnmzCO/TlujrwKu.jis0G..8X8KytdbQEEYBE4h0TDAMiPqqnLPeK',
+      0, 'admin', NULL, NULL, NULL, NULL, NOW(), NOW(), NULL);
+
+-- ---- equipments ------------------------------------------------------------
+INSERT INTO `equipments`
+  (`name`, `slug`, `description`, `icon`, `aliases`, `category`, `is_active`, `sort_order`, `created_at`, `updated_at`)
+VALUES
+  ('Bodyweight', 'bodyweight', 'Gerakan tanpa alat atau beban eksternal', '🧍', JSON_ARRAY('body weight','bw','tanpa alat'), 'bodyweight', 1, 10, NOW(), NOW()),
+  ('Dumbbell', 'dumbbell', 'Alat beban bebas', '🏋️', JSON_ARRAY('dumbbells','db'), 'free_weight', 1, 20, NOW(), NOW()),
+  ('Barbell', 'barbell', 'Alat beban batang', '🏋️', JSON_ARRAY('barbells'), 'free_weight', 1, 30, NOW(), NOW()),
+  ('Treadmill', 'treadmill', 'Mesin kardio jalan atau lari', '🏃', JSON_ARRAY('running machine'), 'cardio', 1, 40, NOW(), NOW()),
+  ('Resistance Band', 'resistance_band', 'Pita elastis resistensi', '➰', JSON_ARRAY('band','resistance bands'), 'band', 1, 50, NOW(), NOW()),
+  ('Kettlebell', 'kettlebell', 'Beban kettlebell', '🔔', JSON_ARRAY('kettlebells','kb'), 'free_weight', 1, 60, NOW(), NOW()),
+  ('Gym Ball', 'gym_ball', 'Bola stabilitas latihan', '⚽', JSON_ARRAY('stability ball','exercise ball','swiss ball'), 'functional', 1, 70, NOW(), NOW()),
+  ('Lat Pulldown', 'lat_pulldown', 'Mesin tarik ke bawah', '🔩', JSON_ARRAY('mesin lat pulldown','lat pulldown','cable pulldown'), 'machine', 1, 80, NOW(), NOW()),
+  ('Leg Curl/Extension', 'leg_curl_extension', 'Mesin leg curl atau leg extension', '🦵', JSON_ARRAY('leg curl','leg extension','leg curl extension'), 'machine', 1, 90, NOW(), NOW()),
+  ('Matras', 'matras', 'Matras lantai untuk mobility dan core', '🧘', JSON_ARRAY('yoga mat','exercise mat'), 'bodyweight', 1, 100, NOW(), NOW()),
+  ('Rings', 'rings', 'Cincin gymnastic', '◯', JSON_ARRAY('ring','gymnastic rings'), 'calisthenics', 1, 110, NOW(), NOW());
+
+INSERT INTO `pricing_plans`
+  (`code`, `name`, `description`, `price`, `currency`, `duration_days`, `features`, `is_active`, `sort_order`, `created_at`, `updated_at`)
+VALUES
+  ('premium_monthly', 'Premium Bulanan', 'Rekomendasi AI dan custom equipment selama 30 hari', 25000.00, 'IDR', 30,
+   JSON_ARRAY('AI Coach','Custom Equipment','4-5 hari workout split'), 1, 10, NOW(), NOW());
 
 -- ---- exercises -------------------------------------------------------------
 --   3 gerakan gratis + 2 gerakan premium-only + variasi kategori untuk filter.
@@ -51,7 +81,11 @@ VALUES
   (10, 'Sumo Squat',    'lower body', 'bodyweight', 'legs',       8.50,  0, NOW(), NOW()),
   (11, 'Treadmill',     'cardio',     'treadmill',  'cardio',     9.00,  0, NOW(), NOW()),
   (12, 'Dumbbell Row',  'upper body', 'dumbbell',   'back',       7.50,  0, NOW(), NOW()),
-  (13, 'Lunges',        'lower body', 'bodyweight', 'legs',       7.00,  0, NOW(), NOW());
+  (13, 'Lunges',        'lower body', 'bodyweight', 'legs',       7.00,  0, NOW(), NOW()),
+  (14, 'Lat Pulldown',  'upper body', 'lat_pulldown', 'back',     7.00,  0, NOW(), NOW()),
+  (15, 'Leg Curl',      'lower body', 'leg_curl_extension', 'legs', 6.50, 0, NOW(), NOW()),
+  (16, 'Leg Extension', 'lower body', 'leg_curl_extension', 'legs', 6.50, 0, NOW(), NOW()),
+  (17, 'Matras Mobility', 'core',     'matras',       'full body', 4.00, 0, NOW(), NOW());
 
 -- ---- workout_logs (4 sesi milik user 1 / Premium) --------------------------
 --   Tanggal dibuat RELATIF terhadap hari berjalan (CURDATE()) supaya streak,

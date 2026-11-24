@@ -159,7 +159,33 @@ Prefix dasar: **`/api/v1`**. Format response konsisten:
 
 | Method | Path                                | Deskripsi                                                        | Sukses | Error                          |
 |--------|-------------------------------------|-----------------------------------------------------------------|--------|--------------------------------|
-| `POST` | `/api/v1/recommendations/generate`  | Free → template DB (200). Premium → Gemini; upstream gagal → fallback | 200 | 400, 404 (user), **502/504** (upstream) |
+| `POST` | `/api/v1/recommendations/generate`  | Free → template DB standar. Premium → Gemini dengan pemetaan alat kustom, rencana 4/5 hari, dan katalog lokal yang hanya memakai alat terpilih; upstream gagal → fallback | 200 | 400 (alat/jumlah hari), 404 (user), **502/504** (upstream) |
+
+Untuk Premium, kirim `peralatan` sebagai daftar dipisahkan koma (contoh:
+`mesin lat pulldown, leg curl/extension, treadmill, matras`) dan
+`jumlah_hari` bernilai `4` atau `5`. Nama alat dinormalisasi ke katalog
+exercise; Free tetap menerima template standar dan tidak menggunakan pemetaan
+alat kustom.
+
+### Admin API (Tahap A)
+
+Admin menggunakan JWT terpisah dari status Premium:
+
+- `POST /api/v1/users/login` — mengembalikan `access_token` dan `refresh_token`
+- `POST /api/v1/users/refresh` — memperbarui access token
+- `GET /api/v1/admin/dashboard`
+- `GET/PATCH /api/v1/admin/users`
+- `GET/POST/PATCH/DELETE /api/v1/admin/equipments`
+- `GET/POST/PATCH/DELETE /api/v1/admin/pricing-plans`
+
+Semua route `/api/v1/admin/*` membutuhkan `Authorization: Bearer <access_token>`
+dan role `admin`. Token tidak boleh dibuat dari `is_premium`.
+
+Migrasi database non-destructive untuk instalasi lama:
+
+```bash
+npm run migrate:phase-a
+```
 
 ### Payments (`/api/v1/payments`) — integrasi Midtrans (Snap)
 
@@ -271,7 +297,7 @@ UI berada di `/app`.
 |----------------------|----------------------------------------------------------------------------------|
 | **Auth** (sebelum masuk) | `POST /users/login` (tab MASUK), `POST /users` (tab DAFTAR), lalu `GET /users/:id` |
 | **Home** `#/home`    | `GET /users/:id` (log ikut terbawa) — streak, statistik, weekly activity, body metrics, recent sessions + **toggle dark/light** |
-| **Log** `#/log`      | `GET /exercises` (filter equipment & bagian tubuh), `POST /exercises` (mode CUSTOM), `POST /workout-logs` |
+| **Log** `#/log`      | `GET /exercises` (pencarian kata kunci + filter equipment & bagian tubuh, 20 hasil per halaman), `POST /exercises` (mode CUSTOM), `POST /workout-logs` |
 | **AI Coach** `#/coach` | `POST /recommendations/generate` (Free = template DB, Premium = Gemini + fallback 502/504) |
 | **Progress** `#/progress` | Statistik dan riwayat sesi dengan filter tanggal, gerakan, equipment & bagian tubuh serta pagination |
 | **Profil** (tombol kanan atas) | `PUT /users/:id` — username, gender (male/female), umur, berat & tinggi badan |
@@ -286,6 +312,10 @@ Catatan implementasi frontend:
   karena service ini belum memakai JWT; `#btnLogout` menghapusnya.
 - Grid gerakan mendukung **multi-select**: satu klik “LOG” = satu sesi berisi semua gerakan
   yang dipilih (relasi N:M lewat `workout_details`).
+- Katalog gerakan dimulai dengan 20 hasil dan mendukung pencarian nama serta tombol
+  “LIHAT LEBIH BANYAK”; daftar tidak menampilkan seluruh katalog sekaligus.
+- Timer sesi di halaman LOG menyediakan fase **EXERCISE** dan **BREAK**, durasi yang bisa
+  diatur (1–3600 detik), serta kontrol mulai/jeda dan reset.
 - Kolom beban (`WEIGHT (KG)`) tidak ada di skema service, maka dikirim sebagai `catatan`
   sesi, mis. `"@ 8kg"`.
 - Semua teks yang disisipkan ke DOM melewati `esc()` (anti XSS), dan error backend
@@ -319,7 +349,8 @@ const DEMO_ASSETS = {
 Catatan implementasi:
 
 - Tipe media ditebak dari ekstensi: `mp4/webm/mov` dirender sebagai
-  `<video controls autoplay muted loop playsinline>`, lainnya sebagai `<img>` (GIF).
+  `<video controls autoplay muted loop playsinline>`, GIF dan gambar lain dirender
+  sebagai `<img>`.
 - Pratinjau mengikuti kartu yang dipilih / yang sedang mendapat fokus keyboard, dan
   juga nama yang sedang diketik saat mode CUSTOM aktif.
 - Token async terpisah untuk rak dan modal, sehingga hasil probe lama tidak menimpa
@@ -327,6 +358,8 @@ Catatan implementasi:
 - `public/assets/demo/_sample-squat.svg` hanyalah animasi contoh (placeholder) untuk
   membuktikan jalur render bekerja — hapus entri `squat` di `DEMO_ASSETS` begitu GIF
   gerakan yang sebenarnya dimasukkan.
+- `premium-muscle-up.svg` dan `premium-dragon-flag.svg` adalah ilustrasi preview
+  sementara untuk dua gerakan premium seeded; keduanya bukan panduan teknik gerakan.
 
 ---
 

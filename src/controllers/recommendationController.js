@@ -18,27 +18,75 @@
  *     tidak menggantung.
  */
 const axios = require("axios");
-const { User, Exercise } = require("../models");
+const { Op } = require("sequelize");
+const { User, Exercise, Equipment } = require("../models");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS) || 8000;
 
+const EQUIPMENT_ALIASES = new Map([
+  ["bodyweight", "bodyweight"],
+  ["body weight", "bodyweight"],
+  ["bw", "bodyweight"],
+  ["matras", "matras"],
+  ["yoga mat", "bodyweight"],
+  ["dumbbell", "dumbbell"],
+  ["barbell", "barbell"],
+  ["treadmill", "treadmill"],
+  ["resistance band", "resistance_band"],
+  ["resistance_band", "resistance_band"],
+  ["kettlebell", "kettlebell"],
+  ["rings", "rings"],
+  ["ring", "rings"],
+  ["mesin lat pulldown", "lat_pulldown"],
+  ["lat pulldown", "lat_pulldown"],
+  ["lat_pulldown", "lat_pulldown"],
+  ["leg curl/extension", "leg_curl_extension"],
+  ["leg curl extension", "leg_curl_extension"],
+  ["leg_curl_extension", "leg_curl_extension"],
+]);
+
+const parseEquipment = async (input) => {
+  const rows = await Equipment.findAll({ where: { is_active: true } });
+  const aliasMap = new Map();
+  for (const equipment of rows) {
+    const slug = equipment.slug;
+    const aliases = [
+      equipment.name,
+      equipment.slug,
+      ...((equipment.aliases && Array.isArray(equipment.aliases) ? equipment.aliases : [])),
+    ];
+    for (const alias of aliases) {
+      aliasMap.set(String(alias).trim().toLowerCase().replace(/\s+/g, " "), slug);
+    }
+  }
+  for (const [alias, slug] of EQUIPMENT_ALIASES.entries()) aliasMap.set(alias, slug);
+
+  const values = String(input || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase().replace(/\s+/g, " "))
+    .filter(Boolean);
+  const canonical = [...new Set(values.map((value) => aliasMap.get(value)).filter(Boolean))];
+  return { canonical, unknown: values.filter((value) => !aliasMap.has(value)) };
+};
+
 /* ------------------------------------------------------------------ */
 /* Ambil template gerakan dari DB lokal (dipakai Free & sebagai        */
 /* fallback saat Gemini gagal). Kolom dinormalisasi ke skema service.  */
 /* ------------------------------------------------------------------ */
-const ambilTemplateDariDB = async ({ premium, kategori, durasiMenit }) => {
+const ambilTemplateDariDB = async ({ premium, kategori, durasiMenit, equipment }) => {
   const kondisi = premium ? {} : { is_premium_only: false };
   if (kategori) kondisi.kategori = kategori;
+  if (equipment?.length) kondisi.equipment = { [Op.in]: equipment };
 
   // Perkiraan jumlah gerakan: ~1 gerakan / 3 menit, batas 4..10.
   const jumlah = Math.min(Math.max(Math.floor((durasiMenit || 15) / 3), 4), 10);
 
   const rows = await Exercise.findAll({
     where: kondisi,
-    attributes: ["id", "nama_latihan", "kategori", "kalori_per_menit", "is_premium_only"],
+    attributes: ["id", "nama_latihan", "kategori", "equipment", "kalori_per_menit", "is_premium_only"],
     order: [["nama_latihan", "ASC"]],
     limit: jumlah,
   });
@@ -50,8 +98,23 @@ const ambilTemplateDariDB = async ({ premium, kategori, durasiMenit }) => {
     exercise_id: e.id,
     gerakan: e.nama_latihan,
     kelompok_otot: e.kategori,
+    equipment: e.equipment,
     estimasi_kalori_per_menit: Number(e.kalori_per_menit),
   }));
+};
+
+const buatRencanaHarian = (gerakan, jumlahHari) => {
+  if (!jumlahHari) return undefined;
+  const kelompok = ["upper body", "lower body", "core", "cardio", "full body"];
+  return Array.from({ length: jumlahHari }, (_, index) => {
+    const fokus = kelompok[index % kelompok.length];
+    const pilihan = gerakan.filter((item) => item.kelompok_otot === fokus);
+    return {
+      hari: index + 1,
+      fokus,
+      gerakan: (pilihan.length ? pilihan : gerakan).slice(0, 4),
+    };
+  });
 };
 
 /* ------------------------------------------------------------------ */
@@ -79,7 +142,7 @@ const panggilGemini = async (prompt) => {
 /* POST /api/v1/recommendations/generate                               */
 /* ================================================================== */
 const generateRecommendation = async (req, res) => {
-  const { user_id, kondisi, kategori, durasi_menit, peralatan } = req.validated;
+  const { user_id, kondisi, kategori, durasi_menit, peralatan, jumlah_hari } = req.validated;
 
   const user = await User.findByPk(user_id);
   if (!user) {
@@ -103,18 +166,43 @@ const generateRecommendation = async (req, res) => {
     });
   }
 
+  const equipmentInput = await parseEquipment(peralatan);
+  if (peralatan && equipmentInput.unknown.length) {
+    return res.status(400).json({
+      status: "fail",
+      message: `Peralatan tidak dikenali: ${equipmentInput.unknown.join(", ")}. Gunakan nama alat yang valid atau pisahkan dengan koma.`,
+    });
+  }
+  if (peralatan && !equipmentInput.canonical.length) {
+    return res.status(400).json({
+      status: "fail",
+      message: "Field peralatan harus berisi minimal satu alat yang dikenali.",
+    });
+  }
+
+  const equipmentFilter = equipmentInput.canonical.length
+    ? [...new Set(equipmentInput.canonical.flatMap((equipment) => equipment === "matras" ? ["matras", "bodyweight"] : [equipment]))]
+    : undefined;
   // ---------------- PREMIUM: Gemini + gabungan data DB -------------------
   const prompt =
-    `Kamu pelatih kebugaran. Buatkan workout split kilat. ` +
+    `Kamu pelatih kebugaran. Buatkan rutinitas ${jumlah_hari ? `${jumlah_hari} hari` : "latihan"} yang aman dan realistis. ` +
     `Kondisi user: "${kondisi}". ` +
     (kategori ? `Fokus: ${kategori}. ` : "") +
     (durasi_menit ? `Durasi total ${durasi_menit} menit. ` : "") +
-    (peralatan ? `Peralatan tersedia: ${peralatan}. ` : "") +
-    `Berikan daftar latihan singkat dengan set dan repetisi.`;
+    (peralatan
+      ? `HANYA gunakan peralatan berikut dan jangan menyarankan alat lain: ${peralatan}. `
+      : "Gunakan peralatan umum yang tersedia. ") +
+    `Berikan pembagian hari, latihan, set, dan repetisi.`;
 
   // Fallback selalu disiapkan lebih dulu supaya kegagalan sekecil apa pun
   // tidak membuat klien pulang tangan hampa.
-  const fallbackGerakan = await ambilTemplateDariDB({ premium: true, kategori, durasiMenit: durasi_menit });
+  const fallbackGerakan = await ambilTemplateDariDB({
+    premium: true,
+    kategori,
+    durasiMenit: durasi_menit,
+    equipment: equipmentFilter,
+  });
+  const rencanaFallback = buatRencanaHarian(fallbackGerakan, jumlah_hari);
 
   try {
     if (!GEMINI_API_KEY) {
@@ -127,7 +215,12 @@ const generateRecommendation = async (req, res) => {
     const teksAI = await panggilGemini(prompt);
 
     // Gabungkan hasil AI dengan katalog lokal dalam SATU response.
-    const gerakan = await ambilTemplateDariDB({ premium: true, kategori, durasiMenit: durasi_menit });
+    const gerakan = await ambilTemplateDariDB({
+      premium: true,
+      kategori,
+      durasiMenit: durasi_menit,
+      equipment: equipmentFilter,
+    });
     return res.status(200).json({
       status: "success",
       data: {
@@ -135,6 +228,9 @@ const generateRecommendation = async (req, res) => {
         sumber: "gemini_ai",
         arahan_ai: teksAI || "(AI tidak mengembalikan teks)",
         gerakan_katalog_lokal: gerakan,
+        peralatan_dipilih: equipmentFilter || [],
+        jumlah_hari: jumlah_hari || null,
+        rencana_harian: buatRencanaHarian(gerakan, jumlah_hari),
       },
     });
   } catch (err) {
@@ -170,6 +266,9 @@ const generateRecommendation = async (req, res) => {
         sumber: "fallback_database",
         upstream_error: kode,
         gerakan: fallbackGerakan,
+        peralatan_dipilih: equipmentFilter || [],
+        jumlah_hari: jumlah_hari || null,
+        rencana_harian: rencanaFallback,
       },
     });
   }

@@ -8,8 +8,10 @@
     "dev": "nodemon index.js",
     "migrate": "node scripts/migrate.js",
     "migrate:filters": "node scripts/migrate.js filters",
+    "migrate:phase-a": "node scripts/migrate.js phase-a",
     "seed": "node scripts/migrate.js seed",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node --check index.js && node --check public/js/app.js && node --check public/js/api.js",
+    "test": "node --test tests/*.test.js"
   },
   "repository": {
     "type": "git",
@@ -29,7 +31,9 @@
     "dotenv": "^18.0.6",
     "express": "^5.2.1",
     "joi": "^18.2.9",
+    "jsonwebtoken": "^9.0.3",
     "midtrans-client": "^1.4.3",
+    "multer": "^2.5.0",
     "mysql2": "^3.24.5",
     "nodemon": "^3.1.14",
     "sequelize": "^6.37.8"

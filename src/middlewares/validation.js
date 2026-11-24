@@ -133,6 +133,13 @@ const userLoginSchema = Joi.object({
   }),
 });
 
+const authRefreshSchema = Joi.object({
+  refresh_token: Joi.string().trim().required().messages({
+    "any.required": "Field refresh_token wajib diisi",
+    "string.empty": "Field refresh_token tidak boleh kosong",
+  }),
+});
+
 // PUT /api/v1/users/:id — update profil. Email & password TIDAK diubah
 // lewat endpoint ini (jalur riêng / tidak di sini).
 const userUpdateSchema = Joi.object({
@@ -207,6 +214,9 @@ const userUpdateSchema = Joi.object({
 
   is_premium: Joi.boolean().optional().messages({
     "boolean.base": "Field is_premium harus berupa true/false",
+  }),
+  role: Joi.string().valid("user", "admin").optional().messages({
+    "any.only": "Field role harus salah satu dari: user, admin",
   }),
 });
 
@@ -441,6 +451,12 @@ const recommendationSchema = Joi.object({
     "number.max": "Field durasi_menit maksimal 120 menit",
   }),
 
+  jumlah_hari: Joi.number().integer().valid(4, 5).optional().messages({
+    "number.base": "Field jumlah_hari harus berupa angka",
+    "number.integer": "Field jumlah_hari harus bilangan bulat",
+    "any.only": "Field jumlah_hari hanya boleh 4 atau 5 hari",
+  }),
+
   peralatan: Joi.string().trim().max(120).optional().messages({
     "string.max": "Field peralatan maksimal 120 karakter",
     "string.base": "Field peralatan harus berupa teks",
@@ -461,6 +477,78 @@ const paymentCreateSchema = Joi.object({
     "number.integer": "Field user_id harus bilangan bulat",
     "number.positive": "Field user_id harus lebih dari 0",
   }),
+  plan_id: Joi.number().integer().positive().optional(),
+});
+
+const equipmentCreateSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(100).required(),
+  slug: Joi.string().trim().min(2).max(60).optional(),
+  description: Joi.string().trim().max(500).optional().allow(null, ""),
+  icon: Joi.string().trim().max(20).optional().default("🏋️"),
+  aliases: Joi.array().items(Joi.string().trim().min(1).max(60)).optional().default([]),
+  category: Joi.string().trim().min(2).max(40).optional().default("other"),
+  is_active: Joi.boolean().optional().default(true),
+  sort_order: Joi.number().integer().min(0).optional().default(0),
+});
+
+const equipmentUpdateSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(100).optional(),
+  slug: Joi.string().trim().min(2).max(60).optional(),
+  description: Joi.string().trim().max(500).optional().allow(null, ""),
+  icon: Joi.string().trim().max(20).optional(),
+  aliases: Joi.array().items(Joi.string().trim().min(1).max(60)).optional(),
+  category: Joi.string().trim().min(2).max(40).optional(),
+  is_active: Joi.boolean().optional(),
+  sort_order: Joi.number().integer().min(0).optional(),
+});
+
+const pricingPlanCreateSchema = Joi.object({
+  code: Joi.string().trim().min(2).max(40).required(),
+  name: Joi.string().trim().min(2).max(100).required(),
+  description: Joi.string().trim().max(500).optional().allow(null, ""),
+  price: Joi.number().positive().max(100000000).required(),
+  currency: Joi.string().trim().length(3).uppercase().optional().default("IDR"),
+  duration_days: Joi.number().integer().min(1).max(3650).required(),
+  features: Joi.array().items(Joi.string().trim().min(1).max(200)).optional().default([]),
+  is_active: Joi.boolean().optional().default(true),
+  sort_order: Joi.number().integer().min(0).optional().default(0),
+});
+
+const pricingPlanUpdateSchema = pricingPlanCreateSchema.fork(
+  ["code", "name", "price", "duration_days"],
+  (schema) => schema.optional()
+);
+
+const adminUserUpdateSchema = Joi.object({
+  role: Joi.string().valid("user", "admin").optional(),
+  is_premium: Joi.boolean().optional(),
+  nama: Joi.string().trim().min(3).max(100).optional(),
+  username: Joi.string().trim().min(3).max(50).optional(),
+  umur: Joi.number().integer().min(10).max(120).optional().allow(null),
+  gender: Joi.string().valid("male", "female").optional().allow(null),
+  berat_badan: Joi.number().min(20).max(300).optional().allow(null),
+  tinggi_badan: Joi.number().min(50).max(250).optional().allow(null),
+}).min(1);
+
+const adminExerciseCreateSchema = Joi.object({
+  nama_latihan: Joi.string().trim().min(3).max(100).required(),
+  kategori: Joi.string().valid(...KATEGORI).required(),
+  equipment: Joi.string().valid(...EQUIPMENT).optional().default("bodyweight"),
+  body_part: Joi.string().valid(...BODY_PARTS).optional().default("full body"),
+  kalori_per_menit: Joi.number().positive().max(50).required(),
+  is_premium_only: Joi.boolean().optional().default(false),
+});
+
+const adminExerciseUpdateSchema = adminExerciseCreateSchema.fork(
+  ["nama_latihan", "kategori", "kalori_per_menit"],
+  (schema) => schema.optional()
+);
+
+const exerciseMediaCreateSchema = Joi.object({
+  source: Joi.string().valid("upload", "text_to_image", "external").optional().default("upload"),
+  prompt: Joi.string().trim().max(1000).optional().allow(null, ""),
+  is_primary: Joi.boolean().optional().default(false),
+  credit: Joi.string().trim().max(255).optional().allow(null, ""),
 });
 
 /* ================================================================== */
@@ -504,6 +592,7 @@ module.exports = {
   schemas: {
     userRegisterSchema,
     userLoginSchema,
+    authRefreshSchema,
     userUpdateSchema,
     exerciseCreateSchema,
     exerciseUpdateSchema,
@@ -512,5 +601,13 @@ module.exports = {
     workoutLogCreateSchema,
     recommendationSchema,
     paymentCreateSchema,
+    equipmentCreateSchema,
+    equipmentUpdateSchema,
+    pricingPlanCreateSchema,
+    pricingPlanUpdateSchema,
+    adminUserUpdateSchema,
+    adminExerciseCreateSchema,
+    adminExerciseUpdateSchema,
+    exerciseMediaCreateSchema,
   },
 };
