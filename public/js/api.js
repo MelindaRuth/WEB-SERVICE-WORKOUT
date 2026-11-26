@@ -19,7 +19,7 @@ class ApiError extends Error {
   }
 }
 
-async function request(path, { method = "GET", body, query } = {}) {
+async function request(path, { method = "GET", body, query, allowRefresh = true } = {}) {
   const url = new URL(API_BASE + path, window.location.origin);
   if (query) {
     Object.entries(query).forEach(([k, v]) => {
@@ -32,6 +32,7 @@ async function request(path, { method = "GET", body, query } = {}) {
     const accessToken = localStorage.getItem(AUTH_KEYS.access);
     res = await fetch(url, {
       method,
+      credentials: "include",
       headers: {
         ...(body ? { "Content-Type": "application/json" } : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -51,6 +52,19 @@ async function request(path, { method = "GET", body, query } = {}) {
   }
 
   if (!res.ok) {
+    if (res.status === 401 && allowRefresh) {
+      try {
+        await refreshAccessToken();
+        return request(path, { method, body, query, allowRefresh: false });
+      } catch (refreshError) {
+        clearSession();
+        window.dispatchEvent(new CustomEvent("fitai:session-expired", {
+          detail: { message: refreshError.message || "Sesi telah berakhir" },
+        }));
+        throw new ApiError("Sesi telah berakhir. Silakan masuk kembali.", 401);
+      }
+    }
+
     const message =
       (json && (json.message || json.error)) ||
       `Request gagal dengan status ${res.status}`;
@@ -59,18 +73,51 @@ async function request(path, { method = "GET", body, query } = {}) {
   return json;
 }
 
+let refreshPromise = null;
+
+async function refreshAccessToken() {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const res = await fetch(`${API_BASE}/users/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.data?.access_token) {
+      throw new ApiError(json?.message || "Refresh token tidak valid", res.status || 401);
+    }
+
+    localStorage.setItem(AUTH_KEYS.access, json.data.access_token);
+    return json.data.access_token;
+  })();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
+function clearSession() {
+  localStorage.removeItem(AUTH_KEYS.access);
+  localStorage.removeItem(AUTH_KEYS.refresh);
+  localStorage.removeItem("fitai_user_id");
+}
+
 const api = {
   /* ------------------------------- USER ---------------------------- */
   listUsers: (query) => request("/users", { query }),
   getUser: (id) => request(`/users/${id}`),
   register: (body) => request("/users", { method: "POST", body }),
   login: async (body) => {
-    const result = await request("/users/login", { method: "POST", body });
+    const result = await request("/users/login", { method: "POST", body, allowRefresh: false });
     if (result.data?.access_token) localStorage.setItem(AUTH_KEYS.access, result.data.access_token);
-    if (result.data?.refresh_token) localStorage.setItem(AUTH_KEYS.refresh, result.data.refresh_token);
     return result;
   },
-  refresh: (refreshToken) => request("/users/refresh", { method: "POST", body: { refresh_token: refreshToken } }),
+  refresh: () => request("/users/refresh", { method: "POST", allowRefresh: false }),
+  logout: () => request("/users/logout", { method: "POST", allowRefresh: false }),
   updateUser: (id, body) => request(`/users/${id}`, { method: "PUT", body }),
   listUserLogs: (id, query) => request(`/users/${id}/workout-logs`, { query }),
 
@@ -91,6 +138,12 @@ const api = {
   adminDashboard: () => request("/admin/dashboard"),
   adminListUsers: (query) => request("/admin/users", { query }),
   adminUpdateUser: (id, body) => request(`/admin/users/${id}`, { method: "PATCH", body }),
+  adminDeleteUser: (id) => request(`/admin/users/${id}`, { method: "DELETE" }),
+  adminRestoreUser: (id) => request(`/admin/users/${id}/restore`, { method: "POST" }),
+  adminListUserSessions: (id) => request(`/admin/users/${id}/sessions`),
+  adminLogoutAllUserSessions: (id) => request(`/admin/users/${id}/sessions`, { method: "POST" }),
+  adminListUserPayments: (id) => request(`/admin/users/${id}/payments`),
+  adminListUserWorkoutLogs: (id) => request(`/admin/users/${id}/workout-logs`),
   adminListEquipments: () => request("/admin/equipments"),
   adminCreateEquipment: (body) => request("/admin/equipments", { method: "POST", body }),
   adminUpdateEquipment: (id, body) => request(`/admin/equipments/${id}`, { method: "PATCH", body }),
@@ -120,6 +173,27 @@ const api = {
       body: form,
     });
     const json = await res.json();
+    if (res.status === 401) {
+      try {
+        await refreshAccessToken();
+        const retryToken = localStorage.getItem(AUTH_KEYS.access);
+        const retryRes = await fetch(`${API_BASE}/admin/exercises/${exerciseId}/media`, {
+          method: "POST",
+          headers: retryToken ? { Authorization: `Bearer ${retryToken}` } : {},
+          body: form,
+        });
+        const retryJson = await retryRes.json().catch(() => null);
+        if (!retryRes.ok) throw new ApiError(retryJson?.message || "Upload media gagal", retryRes.status, retryJson?.errors, retryJson);
+        return retryJson;
+      } catch (refreshError) {
+        if (refreshError instanceof ApiError) throw refreshError;
+        clearSession();
+        window.dispatchEvent(new CustomEvent("fitai:session-expired", {
+          detail: { message: refreshError.message || "Sesi telah berakhir" },
+        }));
+        throw new ApiError("Sesi telah berakhir. Silakan masuk kembali.", 401);
+      }
+    }
     if (!res.ok) throw new ApiError(json.message || "Upload media gagal", res.status, json.errors, json);
     return json;
   },

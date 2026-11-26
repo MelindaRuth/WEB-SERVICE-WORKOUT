@@ -160,7 +160,16 @@ const listUsers = async (req, res) => {
       { email: { [Op.like]: k } },
     ];
   }
-  const { count, rows } = await User.findAndCountAll({ where, limit, offset, order: [["id", "ASC"]] });
+  const includeDeleted = req.query.include_deleted === "true";
+  const includeDeletedOnly = req.query.deleted_only === "true";
+  if (includeDeletedOnly) where.deleted_at = { [Op.ne]: null };
+  const { count, rows } = await User.findAndCountAll({
+    where,
+    limit,
+    offset,
+    order: [["id", "ASC"]],
+    paranoid: includeDeleted || includeDeletedOnly,
+  });
   return res.status(200).json({ status: "success", total: count, limit, offset, data: rows });
 };
 
@@ -177,6 +186,31 @@ const updateUserAdmin = async (req, res) => {
   await user.update(req.validated);
   await audit(req, "update", "user", user.id, before, user.get({ plain: true }));
   return res.status(200).json({ status: "success", message: "User berhasil diperbarui", data: user });
+};
+
+const deleteUserAdmin = async (req, res) => {
+  const user = await User.findByPk(req.params.id);
+  if (!user) return res.status(404).json({ status: "fail", message: "User tidak ditemukan" });
+  if (user.role === "admin") {
+    const adminCount = await User.count({ where: { role: "admin" } });
+    if (adminCount <= 1) return res.status(409).json({ status: "fail", message: "Tidak boleh menghapus administrator terakhir" });
+  }
+  const logCount = await WorkoutLog.count({ where: { user_id: user.id } });
+  if (logCount > 0) return res.status(409).json({ status: "fail", message: `User masih memiliki ${logCount} workout log aktif` });
+  const before = user.get({ plain: true });
+  await user.destroy();
+  await audit(req, "soft_delete", "user", user.id, before, { deleted_at: new Date() });
+  return res.status(200).json({ status: "success", message: "User berhasil di-soft delete" });
+};
+
+const restoreUserAdmin = async (req, res) => {
+  const user = await User.findByPk(req.params.id, { paranoid: false });
+  if (!user) return res.status(404).json({ status: "fail", message: "User tidak ditemukan" });
+  if (!user.deleted_at) return res.status(409).json({ status: "fail", message: "User tidak dalam status terhapus" });
+  const deletedAt = user.deleted_at;
+  await user.restore();
+  await audit(req, "restore", "user", user.id, { deleted_at: deletedAt }, null);
+  return res.status(200).json({ status: "success", message: "User berhasil dipulihkan", data: user });
 };
 
 const listExercisesAdmin = async (req, res) => {
@@ -243,7 +277,12 @@ const createExerciseMedia = async (req, res) => {
   if (!req.file) return res.status(400).json({ status: "fail", message: "Field file media wajib dipilih" });
 
   const ext = path.extname(req.file.filename).toLowerCase();
-  const mediaType = [".gif"].includes(ext) ? "gif" : [".mp4", ".webm", ".mov"].includes(ext) ? "video" : "image";
+  const mime = String(req.file.mimetype || "").toLowerCase();
+  const mediaType = mime === "image/gif" || ext === ".gif"
+    ? "gif"
+    : mime.startsWith("video/") || [".mp4", ".webm", ".mov"].includes(ext)
+      ? "video"
+      : "image";
   if (req.validated.is_primary) {
     await ExerciseMedia.update({ is_primary: false }, { where: { exercise_id: exercise.id } });
   }
@@ -273,6 +312,24 @@ const deleteExerciseMedia = async (req, res) => {
   return res.status(200).json({ status: "success", message: "Media exercise berhasil dihapus" });
 };
 
+const listUserPaymentsAdmin = async (req, res) => {
+  const user = await User.findByPk(req.params.id, { paranoid: false });
+  if (!user) return res.status(404).json({ status: "fail", message: "User tidak ditemukan" });
+  const payments = await PaymentTransaction.findAll({ where: { user_id: user.id }, order: [["created_at", "DESC"]] });
+  return res.status(200).json({ status: "success", data: payments });
+};
+
+const listUserWorkoutLogsAdmin = async (req, res) => {
+  const user = await User.findByPk(req.params.id, { paranoid: false });
+  if (!user) return res.status(404).json({ status: "fail", message: "User tidak ditemukan" });
+  const logs = await WorkoutLog.findAll({
+    where: { user_id: user.id },
+    include: [{ model: Exercise, as: "exercises", attributes: ["id", "nama_latihan", "kategori"], through: { attributes: ["set", "repetition", "durasi_menit", "kalori_terbakar"] } }],
+    order: [["tanggal", "DESC"]],
+  });
+  return res.status(200).json({ status: "success", data: logs });
+};
+
 module.exports = {
   dashboard,
   listEquipments,
@@ -285,6 +342,8 @@ module.exports = {
   deletePricingPlan,
   listUsers,
   updateUserAdmin,
+  deleteUserAdmin,
+  restoreUserAdmin,
   listExercisesAdmin,
   createExerciseAdmin,
   updateExerciseAdmin,
@@ -292,4 +351,6 @@ module.exports = {
   listExerciseMedia,
   createExerciseMedia,
   deleteExerciseMedia,
+  listUserPaymentsAdmin,
+  listUserWorkoutLogsAdmin,
 };

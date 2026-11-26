@@ -2,8 +2,9 @@ const express = require("express");
 const router = express.Router();
 const methodNotAllowed = require("../middlewares/methodNotAllowed");
 const { validate, schemas } = require("../middlewares/validation");
-const { requireAuth, requireAdmin } = require("../middlewares/auth");
+const { requireAuth, requireAdmin, logoutAllSessions, listRefreshSessions } = require("../middlewares/auth");
 const multer = require("multer");
+const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const {
@@ -25,16 +26,53 @@ const {
   listExerciseMedia,
   createExerciseMedia,
   deleteExerciseMedia,
+  deleteUserAdmin,
+  restoreUserAdmin,
+  listUserPaymentsAdmin,
+  listUserWorkoutLogsAdmin,
 } = require("../controllers/adminController");
 
 const uploadDir = path.join(process.cwd(), "public", "uploads", "exercises");
 fs.mkdirSync(uploadDir, { recursive: true });
+
+const MIME_EXTENSIONS = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "video/quicktime": ".mov",
+};
+
+const MIME_EXTENSIONS_ALLOWED = new Set([...Object.values(MIME_EXTENSIONS), ".jpeg"]);
+
+const storage = multer.diskStorage({
+  destination: uploadDir,
+  filename: (req, file, cb) => {
+    const mimeExtension = MIME_EXTENSIONS[file.mimetype];
+    const uniqueName = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}${mimeExtension}`;
+    cb(null, uniqueName);
+  },
+});
+
 const upload = multer({
-  dest: uploadDir,
+  storage,
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"];
-    cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
+    const originalExtension = path.extname(file.originalname).toLowerCase();
+    const mimeExtension = MIME_EXTENSIONS[file.mimetype];
+    const mimeAllowed = Boolean(mimeExtension);
+    const extensionAllowed = MIME_EXTENSIONS_ALLOWED.has(originalExtension);
+    const jpegCompatible = file.mimetype === "image/jpeg" && [".jpg", ".jpeg"].includes(originalExtension);
+    const pairMismatch = mimeAllowed && mimeExtension !== originalExtension && !jpegCompatible;
+    if (!mimeAllowed || !extensionAllowed || pairMismatch) {
+      const error = new Error("Tipe file media tidak didukung");
+      error.status = 400;
+      error.expose = true;
+      return cb(error);
+    }
+    cb(null, true);
   },
 });
 
@@ -50,7 +88,23 @@ router
 router
   .route("/users/:id")
   .patch(validate(schemas.adminUserUpdateSchema), updateUserAdmin)
-  .all(methodNotAllowed("PATCH"));
+  .delete(deleteUserAdmin)
+  .all(methodNotAllowed("PATCH", "DELETE"));
+
+router
+  .route("/users/:id/restore")
+  .post(restoreUserAdmin)
+  .all(methodNotAllowed("POST"));
+
+router
+  .route("/users/:id/payments")
+  .get(listUserPaymentsAdmin)
+  .all(methodNotAllowed("GET"));
+
+router
+  .route("/users/:id/workout-logs")
+  .get(listUserWorkoutLogsAdmin)
+  .all(methodNotAllowed("GET"));
 
 router
   .route("/equipments")
@@ -98,5 +152,11 @@ router
   .patch(validate(schemas.pricingPlanUpdateSchema), updatePricingPlan)
   .delete(deletePricingPlan)
   .all(methodNotAllowed("PATCH", "DELETE"));
+
+router
+  .route("/users/:id/sessions")
+  .get(listRefreshSessions)
+  .post(logoutAllSessions)
+  .all(methodNotAllowed("GET", "POST"));
 
 module.exports = router;

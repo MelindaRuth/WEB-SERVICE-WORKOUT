@@ -22,7 +22,7 @@ const {
 } = require("../controllers/userController");
 const { listUserWorkoutLogs } = require("../controllers/workoutLogController");
 const { refreshAccessToken } = require("../middlewares/auth");
-const { requireAuth, requireAdmin } = require("../middlewares/auth");
+const { requireAuth, requireAdmin, logoutCurrentSession } = require("../middlewares/auth");
 
 // "/"  -> GET daftar | POST registrasi (divalidasi lebih dulu)
 router
@@ -58,5 +58,10 @@ router
   .put(requireAuth, validate(schemas.userUpdateSchema), updateUser)
   .delete(requireAuth, requireAdmin, deleteUser)
   .all(methodNotAllowed("GET", "PUT", "DELETE"));
+
+router
+  .route("/logout")
+  .post(requireAuth, logoutCurrentSession)
+  .all(methodNotAllowed("POST"));
 
 module.exports = router;

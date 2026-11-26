@@ -10,6 +10,7 @@ require("dotenv").config();
 
 const express = require("express");
 const path = require("path");
+const cookieParser = require("cookie-parser");
 const app = express();
 
 const logger = require("./src/middlewares/logger");
@@ -31,6 +32,7 @@ const port = Number(process.env.PORT) || 3000;
 /* 1. MIDDLEWARE GLOBAL (urutan penting: dari atas ke bawah)           */
 /* ------------------------------------------------------------------ */
 app.use(express.json()); // req.body dari application/json
+app.use(cookieParser());
 app.use(express.urlencoded({ extended: true })); // form urlencoded
 app.use(logger); // catat method/path/status/durasi
 

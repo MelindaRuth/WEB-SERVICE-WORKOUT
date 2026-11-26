@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 const getSecret = (name) => {
   const value = process.env[name];
@@ -13,9 +14,9 @@ const signAccessToken = (user) =>
     { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "15m", issuer: "fitai" }
   );
 
-const signRefreshToken = (user) =>
+const signRefreshToken = (user, familyId = createFamilyId()) =>
   jwt.sign(
-    { sub: user.id, role: user.role, type: "refresh" },
+    { sub: user.id, role: user.role, type: "refresh", jti: crypto.randomUUID(), family_id: familyId },
     getSecret("JWT_REFRESH_SECRET"),
     { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d", issuer: "fitai" }
   );
@@ -26,9 +27,14 @@ const verifyAccessToken = (token) =>
 const verifyRefreshToken = (token) =>
   jwt.verify(token, getSecret("JWT_REFRESH_SECRET"), { issuer: "fitai" });
 
+const hashRefreshToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+const createFamilyId = () => crypto.randomBytes(32).toString("hex");
+
 module.exports = {
   signAccessToken,
   signRefreshToken,
   verifyAccessToken,
   verifyRefreshToken,
+  hashRefreshToken,
+  createFamilyId,
 };

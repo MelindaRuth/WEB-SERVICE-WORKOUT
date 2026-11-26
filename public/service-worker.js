@@ -1,4 +1,4 @@
-const CACHE_NAME = "fitai-shell-v1";
+const CACHE_NAME = "fitai-shell-v2";
 const APP_SHELL = [
   "/app",
   "/index.html",
@@ -12,7 +12,6 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -41,4 +40,8 @@ self.addEventListener("fetch", (event) => {
       }).catch(() => caches.match("/app"));
     })
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });

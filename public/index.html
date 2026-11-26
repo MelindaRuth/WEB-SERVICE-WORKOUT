@@ -58,6 +58,7 @@
         >
           <span id="avatarLetter">F</span>
         </button>
+        <button class="fit-chip" id="btnPwaInstall" type="button" hidden>INSTAL APLIKASI</button>
       </div>
     </header>
 
@@ -167,6 +168,54 @@
             <button type="button" class="btn fit-btn-primary" id="modalDemoPick">+ PILIH GERAKAN INI</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ========================= MODAL ADMIN ========================= -->
+    <div class="modal fade" id="modalAdminForm" tabindex="-1" aria-hidden="true" aria-labelledby="modalAdminFormLabel">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content fit-card">
+          <div class="modal-header border-0">
+            <div>
+              <p class="fit-mono mb-1">ADMIN</p>
+              <h5 class="modal-title fit-display" id="modalAdminFormLabel">FORM</h5>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tutup"></button>
+          </div>
+          <form id="formAdmin" novalidate>
+            <div class="modal-body" id="adminFormBody"></div>
+            <div class="modal-footer border-0">
+              <button type="button" class="btn fit-btn-ghost" data-bs-dismiss="modal">BATAL</button>
+              <button type="submit" class="btn fit-btn-primary" id="adminFormSubmit">SIMPAN</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="modalAdminConfirm" tabindex="-1" aria-hidden="true" aria-labelledby="modalAdminConfirmLabel">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content fit-card">
+          <div class="modal-header border-0">
+            <h5 class="modal-title fit-display" id="modalAdminConfirmLabel">KONFIRMASI</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tutup"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-0" id="adminConfirmText">Anda yakin ingin melanjutkan?</p>
+          </div>
+          <div class="modal-footer border-0">
+            <button type="button" class="btn fit-btn-ghost" data-bs-dismiss="modal">BATAL</button>
+            <button type="button" class="btn fit-btn-primary" id="adminConfirmSubmit">LANJUTKAN</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================= BANNER UPDATE PWA ========================= -->
+    <div class="position-fixed top-0 start-50 translate-middle-x mt-3 p-2" id="pwaUpdateBanner" hidden style="z-index:1085">
+      <div class="fit-card d-flex align-items-center gap-3 py-2 px-3">
+        <span class="fit-mono">VERSI BARU TERSEDIA</span>
+        <button class="btn fit-btn-primary" id="btnPwaUpdate" type="button">PERBARUI</button>
       </div>
     </div>
 

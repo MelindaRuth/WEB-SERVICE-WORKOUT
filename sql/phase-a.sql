@@ -94,6 +94,25 @@ CREATE TABLE IF NOT EXISTS `admin_action_logs` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `refresh_sessions` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` INT UNSIGNED NOT NULL,
+  `token_hash` CHAR(64) NOT NULL,
+  `family_id` CHAR(64) NOT NULL,
+  `revoked_at` DATETIME NULL,
+  `revoked_reason` VARCHAR(80) NULL,
+  `expires_at` DATETIME NOT NULL,
+  `ip_address` VARCHAR(45) NULL,
+  `user_agent` VARCHAR(500) NULL,
+  `created_at` DATETIME NOT NULL,
+  `updated_at` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `refresh_sessions_token_hash_unique` (`token_hash`),
+  KEY `refresh_sessions_user_index` (`user_id`),
+  KEY `refresh_sessions_family_index` (`family_id`),
+  CONSTRAINT `fk_refresh_sessions_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT IGNORE INTO `equipments`
   (`name`,`slug`,`description`,`icon`,`aliases`,`category`,`is_active`,`sort_order`,`created_at`,`updated_at`)
 VALUES

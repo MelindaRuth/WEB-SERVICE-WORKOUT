@@ -74,7 +74,17 @@ const signatureValid = ({ order_id, status_code, gross_amount, signature_key }) 
 /* POST /api/v1/payments/transaction                                   */
 /* ================================================================== */
 const createTransaction = async (req, res) => {
-  const { user_id, plan_id } = req.validated;
+  const { plan_id } = req.validated;
+  const targetUserId = req.auth.role === "admin"
+    ? (req.validated.user_id || req.auth.user_id)
+    : req.auth.user_id;
+
+  if (req.auth.role !== "admin" && req.validated.user_id && Number(req.validated.user_id) !== req.auth.user_id) {
+    return res.status(403).json({
+      status: "fail",
+      message: "Tidak dapat membuat transaksi untuk user lain",
+    });
+  }
 
   if (!MIDTRANS_SERVER_KEY) {
     console.error("[MIDTRANS] MIDTRANS_SERVER_KEY belum diisi di .env");
@@ -85,11 +95,11 @@ const createTransaction = async (req, res) => {
   }
 
   // 1) user harus ada.
-  const user = await User.findByPk(user_id);
+  const user = await User.findByPk(targetUserId);
   if (!user) {
     return res
       .status(404)
-      .json({ status: "fail", message: `User dengan id ${user_id} tidak ditemukan` });
+      .json({ status: "fail", message: `User dengan id ${targetUserId} tidak ditemukan` });
   }
 
   // 2) aturan bisnis: user yang sudah premium tidak perlu bayar lagi.

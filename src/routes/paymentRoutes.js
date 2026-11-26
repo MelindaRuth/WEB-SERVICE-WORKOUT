@@ -9,6 +9,7 @@ const router = express.Router();
 
 const methodNotAllowed = require("../middlewares/methodNotAllowed");
 const { validate, schemas } = require("../middlewares/validation");
+const { requireAuth } = require("../middlewares/auth");
 
 const {
   createTransaction,
@@ -18,7 +19,7 @@ const {
 // "/transaction" -> klien minta token Snap untuk mulai membayar.
 router
   .route("/transaction")
-  .post(validate(schemas.paymentCreateSchema), createTransaction)
+  .post(requireAuth, validate(schemas.paymentCreateSchema), createTransaction)
   .all(methodNotAllowed("POST"));
 
 // "/notification" -> webhook server-to-server dari Midtrans (TANPA validasi Joi;

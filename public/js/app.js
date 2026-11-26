@@ -172,13 +172,33 @@ let deferredPwaInstall = null;
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   deferredPwaInstall = event;
+  const installButton = $("#btnPwaInstall");
+  if (installButton) installButton.hidden = false;
   toast("FITAI siap dipasang sebagai aplikasi");
 });
 
 window.addEventListener("appinstalled", () => {
   deferredPwaInstall = null;
+  const installButton = $("#btnPwaInstall");
+  if (installButton) installButton.hidden = true;
   toast("FITAI berhasil dipasang ✅");
 });
+
+$("#btnPwaInstall")?.addEventListener("click", async () => {
+  if (!deferredPwaInstall) return;
+  await deferredPwaInstall.prompt();
+  await deferredPwaInstall.userChoice;
+  deferredPwaInstall = null;
+  $("#btnPwaInstall").hidden = true;
+});
+
+$("#btnPwaUpdate")?.addEventListener("click", () => {
+  navigator.serviceWorker.getRegistration().then((registration) => {
+    registration?.waiting?.postMessage({ type: "SKIP_WAITING" });
+  });
+});
+
+navigator.serviceWorker?.addEventListener("controllerchange", () => window.location.reload());
 
 function updateTopbar() {
   if (!state.user) return;
@@ -1513,6 +1533,9 @@ async function renderAdmin(app) {
   const active = ADMIN_TABS.map(([key]) => key).includes(raw) ? raw : "dashboard";
 
   app.innerHTML = `
+
+
+
     <section class="fit-hero">
       <div><p class="fit-mono mb-1">CONTROL CENTER</p><h1 class="fit-display fit-page-title">ADMIN</h1></div>
       <span class="fit-badge-lime">ADMIN ✦</span>
@@ -2011,7 +2034,8 @@ function bindProfile() {
     }
   });
 
-  $("#btnLogout").addEventListener("click", () => {
+  $("#btnLogout").addEventListener("click", async () => {
+    try { await api.logout(); } catch (_) { /* tetap bersihkan sesi lokal */ }
     localStorage.removeItem(LS.user);
     localStorage.removeItem("fitai_access_token");
     localStorage.removeItem("fitai_refresh_token");
@@ -2033,10 +2057,20 @@ window.addEventListener("hashchange", () => {
 document.addEventListener("DOMContentLoaded", async () => {
   applyTheme(currentTheme());
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/service-worker.js").catch((err) => {
-      console.warn("Service worker belum aktif:", err);
-    });
+    navigator.serviceWorker.register("/service-worker.js").then((registration) => {
+      registration.addEventListener("updatefound", () => {
+        const newWorker = registration.installing;
+        newWorker?.addEventListener("statechange", () => {
+          if (newWorker.state === "installed" && navigator.serviceWorker.controller) $("#pwaUpdateBanner").hidden = false;
+        });
+      });
+    }).catch((err) => console.warn("Service worker belum aktif:", err));
   }
+  window.addEventListener("fitai:session-expired", (event) => {
+    state.user = null;
+    state.logs = [];
+    renderAuth(event.detail?.message || "Sesi telah berakhir. Silakan masuk kembali.");
+  });
   bindShell();
   bindProfile();
   bindDemoModal();

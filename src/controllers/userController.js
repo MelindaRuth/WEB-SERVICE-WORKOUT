@@ -14,8 +14,8 @@
  */
 const { fn, col, where: rawWhere } = require("sequelize");
 const bcrypt = require("bcryptjs");
-const { User, WorkoutLog } = require("../models");
-const { signAccessToken, signRefreshToken } = require("../utils/authTokens");
+const { User, WorkoutLog, RefreshSession } = require("../models");
+const { signAccessToken, signRefreshToken, verifyRefreshToken, hashRefreshToken } = require("../utils/authTokens");
 
 // Biaya hashing bcrypt. 10 adalah keseimbangan wajar aman-cepat untuk API.
 const BCRYPT_ROUNDS = 10;
@@ -122,6 +122,23 @@ const loginUser = async (req, res) => {
   }
 
   const { password: _buang, ...tanpaPassword } = user.get({ plain: true });
+  const refreshToken = signRefreshToken(user);
+  const refreshPayload = verifyRefreshToken(refreshToken);
+  await RefreshSession.create({
+    user_id: user.id,
+    token_hash: hashRefreshToken(refreshToken),
+    family_id: refreshPayload.family_id,
+    expires_at: new Date(refreshPayload.exp * 1000),
+    ip_address: req.ip,
+    user_agent: String(req.get("user-agent") || "").slice(0, 500),
+  });
+  res.cookie("fitai_refresh_token", refreshToken, {
+    httpOnly: true,
+    secure: String(process.env.NODE_ENV).toLowerCase() === "production",
+    sameSite: "lax",
+    path: "/api/v1/users",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
 
   return res.status(200).json({
     status: "success",
